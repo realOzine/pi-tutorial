@@ -1,7 +1,7 @@
 // 运行第一课练习或参考实现，并按需导出轨迹。
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { lstat, mkdir, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import { runAgentLoop } from "./loop.ts";
 import { runAgentLoop as referenceLoop } from "../../solutions/01-agent-loop.ts";
@@ -38,7 +38,19 @@ async function main(): Promise<void> {
   if (last?.role === "assistant") console.log(`\n${last.content}`);
   console.log(`\n模型调用 ${result.steps} 次，结束状态：${result.status}`);
   if (tracePath) {
-    await mkdir(dirname(tracePath), { recursive: true });
+    let directory = process.cwd();
+    for (const segment of relative(directory, dirname(tracePath)).split(sep)) {
+      directory = resolve(directory, segment);
+      const existing = await lstat(directory).catch((error: unknown) => {
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+        throw error;
+      });
+      if (existing && !existing.isDirectory()) {
+        throw new Error("轨迹输出目录必须是真实目录，不能使用符号链接或文件。");
+      }
+      // shortcut: 检查不防其他进程并发替换目录，需要对抗恶意并发时使用操作系统沙箱。
+      if (!existing) await mkdir(directory);
+    }
     await writeFile(tracePath, `${JSON.stringify(trace, null, 2)}\n`, { flag: "wx" });
     console.log(`轨迹已保存：${tracePath}`);
   }
