@@ -18,9 +18,22 @@
         <a href="#main" aria-current="page">课程说明</a>
         <a href="#map">完整课程地图</a>
         <a href="#method">怎样完成一课</a>
+        <a href="#milestones">三个运行里程碑</a>
+        <a href="lessons/00-typescript.html">00 · 读懂本课需要的 TypeScript</a>
         <a href="lessons/01-agent-loop.html">01 · 最小 Agent 循环</a>
+        <a href="lessons/02-tool-protocol.html">02 · 工具协议与失败反馈</a>
+        <a href="lessons/03-model-adapter.html">03 · 接入真实模型</a>
+        <a href="lessons/04-workspace-tools.html">04 · 构建 coding 工具</a>
+        <a href="lessons/05-streaming.html">05 · 流式输出与事件</a>
+        <a href="lessons/06-cancellation.html">06 · 中断与用户介入</a>
+        <a href="lessons/07-scheduling.html">07 · 多工具调度</a>
+        <a href="lessons/08-sessions.html">08 · 会话保存与恢复</a>
+        <a href="lessons/09-context.html">09 · 上下文选择与压缩</a>
+        <a href="lessons/10-extensions.html">10 · 指令与扩展机制</a>
+        <a href="lessons/11-evaluation.html">11 · 评测与故障分析</a>
+        <a href="lessons/12-capstone.html">12 · 整合项目与架构答辩</a>
       </nav>
-      <p class="sidebar-foot">中文讲解 · TypeScript 实验<br>源码基线：1be312b<br>当前开放：第 1 课</p>
+      <p class="sidebar-foot">中文讲解 · TypeScript 实验<br>源码基线：1be312b<br>00—12 全部教材与实验</p>
     </aside>
     <main id="main">
       <header>
@@ -28,30 +41,31 @@
         <h1>从一个循环，<br>理解 Agent 如何工作。</h1>
         <p class="lead">你告诉模型“读一下 README”，究竟是谁打开文件、把结果交回模型，又是谁决定结束？这门课从这条最短的执行路径开始，一步步搭建自己的 Agent，并回到 pi 的源码核对真实实现。</p>
         <p>每次增加一个机制，都先回答它解决了什么问题。你将亲手写关键代码，观察运行轨迹，再讨论这个选择付出的代价，以及何时应该换一种做法。</p>
-        <div class="meta"><span>主要语言：TypeScript</span><span>学习载体：本地 HTML + 代码实验</span><span>当前状态：第一课样板</span></div>
+        <div class="meta"><span>主要语言：TypeScript</span><span>学习载体：本地 HTML + 代码实验</span><span>课程范围：13 课 · 3 个运行里程碑</span></div>
       </header>
       <div class="note">
-        <p class="note-label">先从第一课开始</p>
-        <p>第一课用固定规则的模拟模型，不需要 API Key，也不会调用付费模型。页面中的轨迹是教学数据；实验在本地终端运行。第 0 课与第 2—12 课列出后续路线，内容尚未交付。</p>
-        <a class="next-link" href="lessons/01-agent-loop.html">进入第 1 课：最小 Agent 循环 →</a>
+        <p class="note-label">从会解释一条轨迹开始</p>
+        <p>不熟悉 TypeScript 时先读第 00 课；能读 async/await 时，从第 01 课开始。默认演示和检查使用固定场景，不需要密钥。页面单步动画是教学模拟，Node 实验才执行代码；真实模型需要在终端显式启用。</p>
+        <a class="next-link" href="lessons/00-typescript.html">先补齐 TypeScript →</a>
+        <a class="next-link" href="lessons/01-agent-loop.html">直接进入最小 Agent 循环 →</a>
       </div>
       <section id="map" aria-labelledby="map-heading">
         <h2 id="map-heading"><span class="section-number">01</span>完整课程地图</h2>
         <p>这是一条逐步扩展同一个程序的路线。前两课建立循环与工具协议，随后接入真实模型和 coding 工具；在程序能够完成任务后，再处理交互、恢复、上下文和扩展。</p>
         <ol class="course-list" start="0">
-          <li><span class="course-number">00</span><div><p class="course-name">读懂本课需要的 TypeScript</p><p class="course-desc">从 Go 的经验出发，认识对象、联合类型、Promise 与 async/await。只补足读源码和写实验的前提。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">01</span><div><p class="course-name"><a href="lessons/01-agent-loop.html">最小 Agent 循环</a></p><p class="course-desc">模型请求 → 工具执行 → 结果回传。写出循环，区分正常结束、工具错误与预算耗尽。</p></div><span class="badge ready">可以学习</span></li>
-          <li><span class="course-number">02</span><div><p class="course-name">工具协议与输入边界</p><p class="course-desc">参数由谁校验？调用和结果如何关联？处理未知工具、错误输入和错误反馈。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">03</span><div><p class="course-name">接入真实模型</p><p class="course-desc">把固定规则替换成模型适配器，观察协议差异、失败方式、成本与非确定性。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">04</span><div><p class="course-name">构建 coding 工具</p><p class="course-desc">在受限工作目录中读、改、检查文件。理解工具能力与执行权限的边界。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">05</span><div><p class="course-name">流式输出与事件</p><p class="course-desc">让界面及时看到进展，区分消息内容、运行事件与最终状态。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">06</span><div><p class="course-name">中断与用户介入</p><p class="course-desc">用户改变主意时如何取消？新的指令在何时进入循环？沿调用链追踪取消信号。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">07</span><div><p class="course-name">多工具调度</p><p class="course-desc">比较串行与并行执行，处理依赖、部分失败和执行顺序。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">08</span><div><p class="course-name">会话保存与恢复</p><p class="course-desc">区分历史与运行状态，检查重启、分支和未完成工具调用留下的问题。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">09</span><div><p class="course-name">上下文选择与压缩</p><p class="course-desc">上下文不够时保留什么？用相同任务比较截断、摘要和按需读取。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">10</span><div><p class="course-name">指令与扩展机制</p><p class="course-desc">让能力按需加入，讨论核心接口的稳定性、扩展顺序与维护成本。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">11</span><div><p class="course-name">评测与故障分析</p><p class="course-desc">用固定任务集验证改动，分开衡量协议正确性、任务成功率、耗时和成本。</p></div><span class="badge">计划中</span></li>
-          <li><span class="course-number">12</span><div><p class="course-name">整合项目与架构答辩</p><p class="course-desc">完成自己的 Agent，解释保留和放弃的能力，并与 pi 及其他开源实现做有证据的比较。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">00</span><div><p class="course-name"><a href="lessons/00-typescript.html">读懂本课需要的 TypeScript</a></p><p class="course-desc">从 Go 的经验出发，认识联合类型、Promise、async/await 与取消通知。只补足读源码和写实验的前提。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">01</span><div><p class="course-name"><a href="lessons/01-agent-loop.html">最小 Agent 循环</a></p><p class="course-desc">模型请求 → 工具执行 → 结果回传。写出循环，区分正常结束、工具错误与步数耗尽。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">02</span><div><p class="course-name"><a href="lessons/02-tool-protocol.html">工具协议与失败反馈</a></p><p class="course-desc">参数由谁校验？调用和结果怎样关联？拒绝未知工具、坏参数和截断调用，保留可恢复的错误反馈。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">03</span><div><p class="course-name"><a href="lessons/03-model-adapter.html">接入真实模型</a></p><p class="course-desc">把内部消息映射到 OpenAI Responses，区分 HTTP 失败、取消、截断和 usage；组成最小 MVP。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">04</span><div><p class="course-name"><a href="lessons/04-workspace-tools.html">构建 coding 工具</a></p><p class="course-desc">读取、写入、精确替换与 Node 语法检查。验证路径、链接和输出边界，对照 pi 与 mini-SWE-agent。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">05</span><div><p class="course-name"><a href="lessons/05-streaming.html">流式输出与事件</a></p><p class="course-desc">消费文本和工具参数增量，区分预览与提交。接入真实 Responses SSE 映射，观察监听器等待。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">06</span><div><p class="course-name"><a href="lessons/06-cancellation.html">中断与用户介入</a></p><p class="course-desc">沿 HTTP 和工具追踪同一个取消信号，明确 steering 与 follow-up 在何时进入循环。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">07</span><div><p class="course-name"><a href="lessons/07-scheduling.html">多工具调度</a></p><p class="course-desc">比较完成顺序和结果顺序，处理部分失败与取消；通过 stdin 操作真实文件修改演示。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">08</span><div><p class="course-name"><a href="lessons/08-sessions.html">会话保存与恢复</a></p><p class="course-desc">从追加日志投影当前分支，检查半写入尾行和未知副作用，恢复时拒绝自动重复执行。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">09</span><div><p class="course-name"><a href="lessons/09-context.html">上下文选择与压缩</a></p><p class="course-desc">对同一历史比较全量、裁剪和摘要。保持工具配对、保留原始证据，区分字符预算与 token。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">10</span><div><p class="course-name"><a href="lessons/10-extensions.html">指令与扩展机制</a></p><p class="course-desc">装配自定义工具和上下文 hook，验证禁用、顺序与清理；对照 DeepSeek Harness 的服务与工厂。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">11</span><div><p class="course-name"><a href="lessons/11-evaluation.html">评测与故障分析</a></p><p class="course-desc">固定任务、独立判定、成对比较。区分任务通过和循环完成，缺失用量与成本保留未知。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">12</span><div><p class="course-name"><a href="lessons/12-capstone.html">整合项目与架构答辩</a></p><p class="course-desc">组成可恢复 CLI，实际修复文件、检查结果、切换扩展与上下文；用证据解释每项架构选择。</p></div><span class="badge ready">可以学习</span></li>
         </ol>
       </section>
       <section id="method" aria-labelledby="method-heading">
@@ -60,13 +74,22 @@
         <ol>
           <li><strong>观察：</strong>把一次输入到最终输出的消息和控制流串起来。</li>
           <li><strong>实现：</strong>只写当前机制，脚手架提供与本课无关的输入输出。</li>
-          <li><strong>验证：</strong>先用模拟模型检查程序行为，再在后续课程接入真实模型。</li>
+          <li><strong>验证：</strong>先用固定场景检查协议，再检查真实文件或 HTTP；真实模型用量和结果另作记录。</li>
           <li><strong>解释：</strong>提交代码、测试结果和一段设计说明，接受评审后再进入下一课。</li>
         </ol>
         <p>参考实现放在独立的 <code>solutions/</code> 中。练习不需要先打开答案；卡住时可以逐层展开提示。完成标准是能解释行为，并应对变化的输入。</p>
-        <p class="quiet">每课会区分源码事实、教学简化、设计推断与实测结果。课程以固定提交为源码基线；本地 pi 更新以后，需要重新核对链接行号和实现行为。</p>
+        <p class="quiet">每课区分源码事实、教学简化、设计推断与实测结果。课程以固定提交为源码基线；本地 pi 更新以后，需要重新核对链接行号和实现行为。</p>
       </section>
-      <footer>Pi 学习手册 · 本地课程样板。当前仅第 1 课可学习；后续内容将随学习反馈逐课完成。</footer>
+      <section id="milestones" aria-labelledby="milestones-heading">
+        <h2 id="milestones-heading"><span class="section-number">03</span>三个运行里程碑</h2>
+        <p>第 03 课把循环和模型协议接成 MVP；第 07 课用真实文件工具与 stdin 形成交互演示；第 12 课再连接日志、上下文和扩展，停止后重新打开会话继续完成任务。每一层都沿用前面明确的接口。</p>
+        <pre><code>npm run lab -- 03 demo
+node labs/07-scheduling/coding-demo.ts --interactive
+npm run lab -- 12 demo</code></pre>
+        <p>这些命令默认使用独立参考实现与固定模型。学生检查用 <code>npm run lab -- 课号 test</code>，初始 TODO 应失败。真实模型入口、预算和实际验证记录见第 12 课；模型说“完成”之后，仍要用实际文件和检查结果验收。</p>
+        <p class="quiet">文件实验只提供受限工具，Node 语法检查不会运行目标程序。工作目录不是操作系统隔离；课程没有承诺任意代码安全、跨进程恢复或通用任务成功率。</p>
+      </section>
+      <footer>Pi 学习手册 · 中文教材、TypeScript 实验与独立参考实现。代码链接直接在 Zed 中打开；源码版本和运行证据各自保留。</footer>
     </main>
   </div>
 </body>

@@ -1,10 +1,8 @@
 # 从最小循环开始学习 Agent
 
-这门课程用 TypeScript 逐步搭建一个本地 coding agent，并以 pi 的源码解释每一步为什么需要这样设计。每课从一个具体问题开始：先预测执行过程，再观察消息和工具调用，最后补全关键代码、运行检查并讨论取舍。
+这门课程用 TypeScript 逐步搭建一个本地 coding agent，并沿 pi 的源码解释每个机制解决的问题、约束和代价。00—12 共 13 课，每课都有 HTML 讲解、单步场景、学生练习、检查和独立参考实现。先观察“读取 README → 收到工具结果 → 再次请求模型”，再逐步加入真实 HTTP、文件修改、流式输出、取消、调度、会话、上下文和扩展。
 
-首期实现第 1 课的 HTML 讲解、实验脚手架和独立参考解答。第 0 课和第 2—12 课目前只有课程规划；运行与页面验证结果记录在 [进度记录](docs/progress.md)，不以大纲中的验收目标代替实际结果。
-
-## 开始第 1 课
+## 开始学习
 
 需要 Node.js 22.19.0 或更新版本，以及 npm。在本仓库根目录运行：
 
@@ -13,51 +11,49 @@ npm install --ignore-scripts
 npm run dev
 ```
 
-浏览器打开 [课程首页](http://127.0.0.1:4173/) 或 [第 1 课](http://127.0.0.1:4173/lessons/01-agent-loop.html)。本地服务默认绑定 `127.0.0.1:4173`，只提供 `site/` 内的静态文件。
+浏览器打开 [课程首页](http://127.0.0.1:4173/)。不熟悉 TypeScript 时从第 00 课开始；能读对象、联合类型和 `async/await` 时，从第 01 课的最小循环开始。本地服务绑定 `127.0.0.1:4173`，只提供 `site/` 内的静态文件。
 
-先阅读页面，再在 Zed 中补全 [学生循环](zed://file/Users/ozine/Project/learn/pi-tutorial/labs/01-agent-loop/loop.ts:1:1)，然后运行：
-
-```sh
-npm run lab:01:test
-```
-
-初始代码保留 TODO，学生检查预期失败。这是练习起点；不要用参考答案覆盖学生文件来让检查变绿。检查通过后，仍需解释消息顺序、停止条件和工具失败后的行为。
-
-若要先观察完整流程，可单独运行参考解答：
+先读页面、预测轨迹，再补全本课学生函数。除第 01 课使用 `loop.ts` 外，学生入口均为 `labs/NN-主题/exercise.ts`。命令中的 `NN` 换成 `00` 到 `12`：
 
 ```sh
-npm run lab:01:demo -- --scenario readme --trace artifacts/lesson-01.json
+npm run lab -- 01 test     # 检查学生实现；初始 TODO 应失败
+npm run lab -- 01 demo     # 观察独立参考实现
+npm run lab -- 01 verify   # 检查独立参考实现
 ```
 
-它执行课程提供的确定性场景并输出 trace，即按时间记录的执行轨迹。输出属于参考实现，不能证明学生代码已经完成，也不是真实模型的推理记录。运行产物放在被 Git 忽略的 `artifacts/`；页面演示、导入轨迹和真实模型实验的边界见 [评阅约定](docs/review-guide.md)。
+`demo` 和 `verify` 默认不调用付费模型。参考检查通过不代表学生已完成；初始检查中可能通过的是脚手架或拒绝路径。不要用答案覆盖学生文件来让检查变绿。完成一课应提交代码差异、实际输出，以及“解决了什么问题、付出什么代价、何时该换方案”的说明，具体见 [评阅约定](docs/review-guide.md)。
 
-维护课程时运行：
+## 三个可以运行的里程碑
 
-```sh
-npm run check
-```
+| 阶段 | 运行入口 | 可以观察什么 |
+|---|---|---|
+| 03 · 最小 MVP | `npm run lab -- 03 demo` | 同一循环通过 `Model` 接口接收响应、执行工具、回传结果；默认使用固定模型 |
+| 07 · 交互式文件修改 | `node labs/07-scheduling/coding-demo.ts --interactive` | 输入 `/start`；实际读取、编辑并检查课程文件；用 `/steer`、`/follow`、`/stop` 观察输入边界 |
+| 12 · 可恢复 Agent | `npm run lab -- 12 demo` | 修改真实练习文件，达到步数上限后重开日志，继续检查，独立验收最终文件 |
 
-该命令检查课程工程，并使用独立参考实现验证实验契约；学生是否完成练习由 `npm run lab:01:test` 单独判断。第 1 课不需要 API key，也不调用付费模型。真实模型接入属于尚未实现的第 3 课。
+第 07 课保留文件和 trace，默认模型按固定规则工作。第 12 课把前面的模块装配成 CLI，支持指定 workspace、会话文件、扩展和上下文预算；完整命令见 [毕业项目说明](labs/12-capstone/README.md)。循环返回 `completed` 只表示没有下一步工作，任务是否成功仍要检查实际文件与检查器结果。
 
-## 内容组织
+真实模型入口必须显式启用。课程提供 OpenAI Responses 的文本与函数调用适配，以及第 05 课的 SSE 流适配；使用 `gpt-6.1-terra`、reasoning effort `none`，不覆盖整个 Responses API。密钥只在本地读取，不放进网页、trace 或 Git。每次真实运行的模型、请求量、用量和验证范围见 [进度记录](docs/progress.md)；本地 HTTP fixture 测试不能替代供应商实测。
 
-所有课程内容都在一个 Git 仓库中。以下是普通子目录，不是独立仓库：
+## 内容和源码
+
+所有课程内容由这一个 Git 仓库追踪：
 
 ```text
 pi-tutorial/
-  site/        HTML、样式和交互演示
-  labs/        学生实现、固定场景和实验检查
+  site/        HTML、样式、单步演示与课程地图
+  labs/        学生实现、共享契约、固定场景和实验检查
   solutions/   独立参考解答
-  docs/        大纲、来源、评阅和进度记录
+  docs/        大纲、来源、评阅和验证记录
   scripts/     本地预览与课程检查
-  tests/       课程基础设施的测试
-  artifacts/   本地执行轨迹；不纳入 Git
+  tests/       课程基础设施检查
+  artifacts/   本地实验产物；不纳入 Git
 ```
 
-pi 源码是只读参考，不复制成学生答案，也不在学习过程中修改。课程固定参考版本 `1be312b46abe45d3914743a4d7837ebaf534d390`；本机位置与在线永久链接见 [来源清单](docs/sources.md)。
+完整学习路线见 [课程大纲](docs/curriculum.md)。pi 是只读源码参考，固定到 `1be312b46abe45d3914743a4d7837ebaf534d390`。第 04 课对照 mini-SWE-agent 的 bash 入口，第 10 课对照 DeepSeek Harness 的服务与工厂装配；引用范围和固定快照见 [来源清单](docs/sources.md)。没有运行或测量的项目，不宣称它的性能或任务成功率。
 
-网页中的代码跳转都使用 `zed://file/绝对路径:行:列`，直接打开 Zed。pi 链接指向 `/Users/ozine/Project/learn/pi/`，课程代码指向 `/Users/ozine/Project/learn/pi-tutorial/`；换电脑时需要更新这些本地路径。GitHub commit 链接保留在来源清单中作版本证据。
+网页代码跳转统一为 `zed://file/绝对路径:行:列`。pi 指向 `/Users/ozine/Project/learn/pi/`，课程代码指向 `/Users/ozine/Project/learn/pi-tutorial/`，不指向临时 worktree。换电脑时需要更新本地路径；来源清单保留固定 commit 链接，便于核对版本。
 
-完整路线见 [课程大纲](docs/curriculum.md)。第 3 课形成最小 MVP，第 7 课形成可交互的 coding agent，第 12 课完成会话恢复、扩展与评测。毕业项目只在限定实验目录中工作；达到课程验收不等于已经适合不受限的生产环境。
+文件工具适用于可信、稳定的本地实验目录：拒绝越界路径和链接，只提供读取、写入、精确替换和 Node 语法检查。工作目录不是操作系统 sandbox；课程也不提供任意 shell、跨进程日志锁或副作用恰好执行一次的保证。
 
-学生负责循环、调度、上下文等核心逻辑；课程提供协议、固定场景、检查和逐步提示。评阅既看运行结果，也看能否解释设计约束和代价。后续课程在完成第 1 课学习反馈后逐课制作，不一次性生成所有答案。
+维护课程时运行 `npm run check`，单独检查全部参考实验可运行 `npm run lab -- all verify`。已执行的检查、真实调用和未完成的视觉验证分别记录在 [进度记录](docs/progress.md)。
