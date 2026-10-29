@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="用一条读取 README 的执行轨迹，理解模型、工具、消息历史和停止条件，并亲手实现最小 Agent 循环。">
+  <title>01 · 最小 Agent 循环 — Pi 学习手册</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script type="module" src="../assets/lesson-01.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <div class="layout">
+    <aside class="sidebar" aria-label="本课目录">
+      <a class="brand" href="../index.html">Pi 学习手册</a>
+      <p class="brand-note">从循环开始，理解每一个取舍</p>
+      <p class="sidebar-label">第一课 / 最小 Agent 循环</p>
+      <nav>
+        <a href="../index.html">← 完整课程地图</a>
+        <a href="#task">1. 从一个任务开始</a>
+        <a href="#trace">2. 单步观察循环</a>
+        <a href="#mechanism">3. 谁在推动下一步</a>
+        <a href="#source">4. 回到 pi 源码</a>
+        <a href="#lab">5. 亲手补齐循环</a>
+        <a href="#tradeoffs">6. 理解本课的取舍</a>
+        <a href="#check">7. 检查你的理解</a>
+        <a href="#review">8. 提交与评审</a>
+      </nav>
+      <p class="sidebar-foot">源码基线：1be312b46<br>轨迹来源：模拟模型<br>本课不调用真实 LLM</p>
+    </aside>
+    <main id="main">
+      <header>
+        <p class="eyebrow">LESSON 01 / 从请求到反馈</p>
+        <h1>最小 Agent 循环</h1>
+        <p class="lead">模型可以提出“读取 README.md”，但这句话本身不会打开文件。需要一段程序执行工具、记录结果，再把新的消息历史发给模型。这段程序，就是我们这一课要实现的循环。</p>
+        <div class="meta"><span>产出：可测试的 runAgentLoop</span><span>前提：函数、数组、条件与循环</span><span>模型与文件：均为模拟</span></div>
+      </header>
+
+      <section id="task" aria-labelledby="task-heading">
+        <h2 id="task-heading"><span class="section-number">01</span>从一个任务开始</h2>
+        <p>假设你接手一个项目，想知道怎样启动它。你给 Agent 的任务是：</p>
+        <div class="note"><p>请读取 <code>README.md</code>，告诉我怎样启动这个项目。</p></div>
+        <p>在这个教学场景中，README 的内容是 <code>启动命令：npm run dev</code>。模型起初只收到用户的问题，并没有这段文件内容。因此，程序需要完成三件事：接住模型提出的读取请求，执行读取，再把读取结果交回去。</p>
+        <p>完成本课后，你应该能从一段消息历史判断程序走到了哪里；实现“有工具请求就执行并继续、没有工具请求就结束”的控制流；解释工具失败和预算耗尽为什么是两种不同的结果。</p>
+        <details>
+          <summary>来自 Go：先读懂这里用到的 TypeScript</summary>
+          <p><code>Promise&lt;T&gt;</code> 表示一个稍后得到 <code>T</code> 的异步结果。<code>await model(messages)</code> 会等待这次调用结束；它不会自动再调用一次。下一次模型请求仍由你写的循环触发。</p>
+          <p>每条消息都有 <code>role</code>，值为 <code>user</code>、<code>assistant</code> 或 <code>tool</code>。TypeScript 的联合类型把这三种对象放在同一类型中；检查 <code>role</code> 以后，程序就能识别这一种消息有哪些字段。可以把它理解为“带类别标签的数据”。</p>
+          <p><code>toolCalls</code> 是描述请求的普通数据，里面写着工具名、路径和调用 ID。只有宿主程序调用 <code>executeTool</code>，工具才真正执行。第一课的执行器也只是读取内存中的固定内容。</p>
+        </details>
+      </section>
+
+      <section id="trace" aria-labelledby="trace-heading">
+        <h2 id="trace-heading"><span class="section-number">02</span>单步观察循环</h2>
+        <p>先选“读取 README 并回答”，每次点击“下一步”前，预测消息历史会增加什么。尤其观察工具完成之后：文件内容已经存在，但最终回答还没有生成，程序需要再请求一次模型。</p>
+        <p class="quiet">下方的“一步”是轨迹中的一个观察点。实验里的 <code>maxSteps</code> 则只计算模型调用次数，两者不是同一个计数。</p>
+        <noscript><div class="note"><p>模拟器需要 JavaScript。你仍可阅读后面的机制讲解和实验说明；最短轨迹是：用户问题 → 模型请求工具 → 工具结果 → 再请求模型 → 最终回答。</p></div></noscript>
+        <div class="simulator" id="simulator">
+          <div class="sim-toolbar">
+            <div>
+              <label class="scenario-label" for="scenario">教学场景</label>
+              <select id="scenario">
+                <option value="readme">读取 README 并回答</option>
+                <option value="tool-error">文件不存在，修正路径后重试</option>
+                <option value="budget">达到模型调用预算</option>
+              </select>
+            </div>
+            <span class="badge" id="step-count">观察点 1 / 6</span>
+          </div>
+          <p class="sim-source" id="trace-source">内置教学模拟 · 不调用模型，也不读取你的文件</p>
+          <ol class="flow" aria-label="当前执行位置">
+            <li data-kind="request" aria-current="step">请求模型</li>
+            <li data-kind="assistant">检查输出</li>
+            <li data-kind="tool">记录工具结果</li>
+            <li data-kind="stop">停止</li>
+          </ol>
+          <div class="sim-status">
+            <p id="current-step" role="status" aria-live="polite">第 1 次模型请求：发送当前消息历史</p>
+            <dl class="sim-stats">
+              <div><dt>状态</dt><dd id="state">等待模型</dd></div>
+              <div><dt>模型调用</dt><dd id="requests">1</dd></div>
+              <div><dt>工具结果</dt><dd id="tool-results">0</dd></div>
+            </dl>
+          </div>
+          <div class="sim-panels">
+            <div class="sim-panel"><h3>当前消息历史 · 下一次请求的依据</h3><div class="message-list" id="messages"></div></div>
+            <div class="sim-panel"><h3>已发生的调用轨迹</h3><ol class="trace-list" id="events"></ol></div>
+          </div>
+          <div class="sim-actions">
+            <button type="button" id="reset">重置</button>
+            <div class="button-group"><button type="button" id="previous" disabled>上一步</button><button type="button" class="primary" id="next">下一步</button></div>
+          </div>
+          <details class="sim-import">
+            <summary>导入本地实验轨迹</summary>
+            <p>导入实验生成的 JSON，逐步查看自己的运行。仅支持本课的 <code>scripted-model</code> 格式，最大 1 MiB；文件只在当前浏览器中读取，不会上传。</p>
+            <label class="scenario-label" for="trace-file">选择轨迹 JSON 文件</label>
+            <input id="trace-file" type="file" accept=".json,application/json">
+            <p id="import-feedback" class="feedback" role="status" aria-live="polite"></p>
+          </details>
+        </div>
+        <h3>再运行两个失败场景</h3>
+        <p>选择“文件不存在”：第一次工具执行失败，错误被写成一条 <code>tool</code> 消息。模拟模型看见这条错误后，改用正确路径读取。这里没有藏着自动重试逻辑；修正后的读取仍是下一次模型输出的新请求。</p>
+        <p>选择“达到模型调用预算”：模拟模型反复要求读同一个文件。两次模型调用和对应工具执行完成后，循环因预算用完而停止。<strong>停止不代表任务完成</strong>，结果必须保留“预算耗尽”的状态，不能伪装成已经得到答案。</p>
+      </section>
+
+      <section id="mechanism" aria-labelledby="mechanism-heading">
+        <h2 id="mechanism-heading"><span class="section-number">03</span>谁在推动下一步</h2>
+        <p>本课把 Agent 分成三个参与者。模型根据消息历史生成回答或工具请求；工具处理一个具体操作；运行时，也就是你要写的宿主程序，负责在两者之间传递数据并控制循环。</p>
+        <div class="table-scroll"><table>
+          <thead><tr><th scope="col">参与者</th><th scope="col">在这个任务里做什么</th><th scope="col">它没有做什么</th></tr></thead>
+          <tbody>
+            <tr><td>模型 <code>model</code></td><td>返回“调用 read_file”或最终回答</td><td>不会因为输出一个工具名，就直接访问文件系统</td></tr>
+            <tr><td>执行器 <code>executeTool</code></td><td>按指定路径返回内容，或抛出错误</td><td>不决定要不要再请求模型</td></tr>
+            <tr><td>循环 <code>runAgentLoop</code></td><td>记录消息、调用工具、检查停止条件</td><td>不替模型推断文件中的启动命令</td></tr>
+          </tbody>
+        </table></div>
+        <h3>消息历史把分开的调用连起来</h3>
+        <p>第二次模型调用能知道 README 的内容，是因为程序把工具结果放进了下一次请求。本课每次发送完整历史，因此请求前的顺序应当是：</p>
+        <pre aria-label="第二次模型请求前的消息顺序"><code>user       请读取 README.md，告诉我怎样启动这个项目。
+assistant  toolCalls: [{ id: "call-1", name: "read_file", path: "README.md" }]
+tool       callId: "call-1", content: "启动命令：npm run dev", isError: false</code></pre>
+        <p><code>id</code> 与 <code>callId</code> 把结果对应到请求。即使只有一个工具，也要保留这个关系。否则增加多个工具调用以后，模型和程序就难以分辨每条结果属于哪一次操作。</p>
+        <h3>三处容易写错的控制流</h3>
+        <p><strong>看到文字就结束。</strong> 模型可能同时返回解释文字和 <code>toolCalls</code>。本课的结束条件是没有工具请求；“我先读一下文件”显然不是任务已经完成的证据。</p>
+        <p><strong>工具失败就丢掉这次调用。</strong> 如果不记录失败，下一次模型请求看不见发生了什么。实验把工具异常转为 <code>isError: true</code> 的结果，让模型有机会调整路径。模型调用本身失败则向调用者抛出，不在循环中无限重试。</p>
+        <p><strong>到预算上限就留下半次交互。</strong> 本课的预算只限制发起模型请求的次数。最后一次允许的请求如果产生了工具调用，仍要执行完这些工具并记录结果，然后停止；否则历史会留下没有结果的请求。</p>
+        <div class="note"><p class="note-label">教学边界</p><p>第一课的模型由固定规则实现，不具备语言理解能力。它让你能够稳定复现一条轨迹，检查循环是否正确；真实模型会不会选对工具、能否完成陌生任务，要在第 3 课接入后另行验证。</p></div>
+      </section>
+
+      <section id="source" aria-labelledby="source-heading">
+        <h2 id="source-heading"><span class="section-number">04</span>回到 pi 源码</h2>
+        <p>现在带着“谁接收输入、谁调模型、谁记录工具结果”这三个问题读源码。以下链接直接在 Zed 中打开本地文件，阅读基线为 <code>1be312b46</code>。</p>
+        <ol>
+          <li><a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:382:1"><code>Agent.prompt</code> · agent.ts:382</a>：接收输入，检查当前是否已有运行，再进入消息处理入口。</li>
+          <li><a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:441:1"><code>runPromptMessages</code> · agent.ts:441</a>：把上下文、配置、事件接收函数和取消信号交给 <code>runAgentLoop</code>。</li>
+          <li><a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent-loop.ts:172:1"><code>runLoop</code> · agent-loop.ts:172</a>：找到主循环，再定位 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent-loop.ts:250:1">模型响应入口（250 行）</a>与<a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent-loop.ts:267:1">工具请求处理（267 行）</a>。</li>
+          <li><a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent-loop.ts:283:1">工具结果追加 · agent-loop.ts:283</a>：对照实验中的消息历史，确认结果被放进下一轮使用的上下文。</li>
+        </ol>
+        <p>第一次读到这四处即可。先能说出“输入 → 循环 → 模型 → 工具 → 历史”的路径，再处理旁边的事件、用户介入和扩展钩子。</p>
+        <div class="table-scroll"><table>
+          <thead><tr><th scope="col">源码中能确认的行为</th><th scope="col">本课如何处理</th></tr></thead>
+          <tbody>
+            <tr><td>pi 从模型响应中筛选 <code>toolCall</code>，再执行工具并追加结果。</td><td>保留这一控制流，用更小的消息类型练习。</td></tr>
+            <tr><td>pi 的循环还检查 steering、follow-up 和显式继续的决定。</td><td>这些放到后续课；本课没有工具请求就正常结束。</td></tr>
+            <tr><td>pi 区分模型错误、中止与输出被截断等情况。</td><td>本课仅处理工具异常、模型异常和调用预算，不声称覆盖全部情况。</td></tr>
+            <tr><td>这里的源码不能支持“pi 自带本课 maxSteps”的说法。</td><td><code>maxSteps</code> 是教学实验的显式预算设计。</td></tr>
+          </tbody>
+        </table></div>
+        <p class="quiet">以上是静态源码事实与教学简化的对照。关于“为什么这样设计”的讨论是本课的工程分析，除非另列作者原文，不把它归为作者本人动机。</p>
+      </section>
+
+      <section id="lab" aria-labelledby="lab-heading">
+        <h2 id="lab-heading"><span class="section-number">05</span>亲手补齐循环</h2>
+        <p>在课程仓库根目录打开终端。你只需实现 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/01-agent-loop/loop.ts:1:1"><code>labs/01-agent-loop/loop.ts</code></a> 中的 <code>runAgentLoop</code>。模型、内存文件、命令行入口和轨迹记录已由脚手架提供。</p>
+        <pre><code>npm run lab:01:test</code></pre>
+        <p>第一次运行会失败，因为关键函数尚未实现。这是练习起点。根据测试反馈补齐函数，再重复运行，直到通过；不要修改测试或用参考实现覆盖自己的代码。</p>
+        <h3>输入和输出约定</h3>
+        <p>函数接收 <code>initialMessages</code>、<code>model</code>、<code>executeTool</code> 和 <code>maxSteps</code>。返回值包含 <code>status</code>、<code>messages</code> 与 <code>steps</code>：状态只能是 <code>completed</code> 或 <code>budget</code>，步数是实际模型调用次数。</p>
+        <ul>
+          <li>保留初始消息，不原地修改调用者传入的数组。</li>
+          <li>每次模型输出先进入历史，再判断是否存在工具请求。</li>
+          <li>按顺序执行本轮所有工具，成功和失败都写成关联到调用 ID 的结果。</li>
+          <li>没有工具请求时返回 <code>completed</code>；预算用完而仍需继续时返回 <code>budget</code>。</li>
+          <li><code>maxSteps = 0</code> 时不调用模型；模型本身抛出的异常交给调用者处理。</li>
+        </ul>
+        <h3>先写自己的版本，卡住再展开提示</h3>
+        <details><summary>提示 1 · 先找哪些数据需要跨轮次保留</summary><p>比较模拟器的第一次和第二次模型请求。消息历史必须继续积累，模型调用计数也必须保留。工具的返回值只要写进历史，就不需要另外维护一份长期结果列表。</p></details>
+        <details><summary>提示 2 · 两种退出路径应放在哪里</summary><p>预算检查发生在发起下一次模型请求之前。正常完成检查发生在本轮 assistant 消息写入历史之后。如果仍有工具请求，执行本轮工具，再回到预算检查。</p></details>
+        <details><summary>提示 3 · catch 的范围会改变错误含义</summary><p>只把 <code>executeTool</code> 的异常转换成工具错误消息。不要用包住整个循环的 catch，把模型连接错误也包装成某个工具失败；那会把本来不同的失败来源混在一起。</p></details>
+        <h3>把终端运行带回网页观察</h3>
+        <p>下面的命令运行独立参考实现，导出一份可复现的模拟轨迹。它用于理解脚手架输出格式，不表示你的实现已经通过测试，也不会展示参考源码。</p>
+        <pre><code>npm run lab:01:demo -- --scenario readme --trace artifacts/lesson-01.json</code></pre>
+        <p>回到本页模拟器，展开“导入本地实验轨迹”并选中生成的 JSON。完成自己的实现后，使用下面的命令导出自己的轨迹，再与参考运行比较：</p>
+        <pre><code>npm run lab:01 -- --scenario readme --trace artifacts/my-lesson-01.json</code></pre>
+        <p class="quiet">将场景改为 <code>tool-error</code> 或 <code>budget</code>，可以检查错误恢复与预算停止。轨迹文件拒绝覆盖已有文件；重复导出时换一个文件名。所有场景仍使用模拟模型，没有真实 LLM 调用。</p>
+      </section>
+
+      <section id="tradeoffs" aria-labelledby="tradeoffs-heading">
+        <h2 id="tradeoffs-heading"><span class="section-number">06</span>理解本课的取舍</h2>
+        <p>循环短，并不意味着所有问题都解决了。下面这些约束让第一版容易理解，也限定了它的能力。你要能说明什么时候继续使用它，什么时候增加机制才有价值。</p>
+        <div class="table-scroll"><table>
+          <thead><tr><th scope="col">当前选择</th><th scope="col">解决的问题与收益</th><th scope="col">代价与改变时机</th></tr></thead>
+          <tbody>
+            <tr><td>使用模拟模型</td><td>每次得到相同轨迹，可以定位循环里的错误，无需费用和凭据。</td><td>无法验证真实模型的工具选择与任务能力；第 3 课加入真实模型检查。</td></tr>
+            <tr><td>串行执行工具</td><td>执行顺序明确，结果关联和失败反馈容易追踪。</td><td>相互独立的慢工具会累加等待时间；第 7 课再判断哪些能并行。</td></tr>
+            <tr><td>每次发送完整历史</td><td>模型能看到之前的请求和结果，程序没有额外上下文策略。</td><td>真实调用的输入会随历史增长；第 9 课处理长度、成本与信息丢失。</td></tr>
+            <tr><td>设置模型调用预算</td><td>阻止反复调用工具的轨迹无限继续。</td><td>可能截断仍在推进的任务；调用次数也不能直接代表 token 成本或耗时。</td></tr>
+            <tr><td>工具异常反馈给模型</td><td>保留失败证据，允许模型改变下一步操作。</td><td>反馈不保证恢复；真实工具还需避免把秘密或内部错误详情泄露给模型。</td></tr>
+          </tbody>
+        </table></div>
+        <p>第一课也没有实现文件写入、任意 shell、权限隔离和持久化。这里的工具只读内存数据，因此可以专注于循环。接入真实副作用之前，必须重新讨论执行边界；不能把教学程序直接当成可安全运行任意命令的 Agent。</p>
+      </section>
+
+      <section id="check" aria-labelledby="check-heading">
+        <h2 id="check-heading"><span class="section-number">07</span>检查你的理解</h2>
+        <p>先选择答案，再查看反馈。如果答错，回到模拟器找一条能够证明或反驳答案的轨迹。</p>
+        <form id="quiz">
+          <fieldset>
+            <legend>1. assistant 同时返回“我来读文件”和一个 toolCall，循环应该怎样做？</legend>
+            <label><input type="radio" name="q1" value="text">已有文字，直接作为最终回答返回。</label>
+            <label><input type="radio" name="q1" value="tool">记录 assistant，执行工具并记录结果，然后继续。</label>
+            <label><input type="radio" name="q1" value="skip">只执行工具，不保留 assistant 消息。</label>
+            <p class="feedback quiz-result" id="q1-feedback"></p>
+          </fieldset>
+          <fieldset>
+            <legend>2. 工具返回“文件不存在”，下一次模型请求为什么必须带上这个结果？</legend>
+            <label><input type="radio" name="q2" value="retry">错误结果会自动保证模型重试成功。</label>
+            <label><input type="radio" name="q2" value="history">让模型看见发生了什么，并关联到先前的调用。</label>
+            <label><input type="radio" name="q2" value="speed">只为了让后续请求更快。</label>
+            <p class="feedback quiz-result" id="q2-feedback"></p>
+          </fieldset>
+          <fieldset>
+            <legend>3. maxSteps 为 1，第一次模型请求返回一个工具调用，本课约定的行为是什么？</legend>
+            <label><input type="radio" name="q3" value="drop">立刻停止，丢弃工具请求。</label>
+            <label><input type="radio" name="q3" value="budget">执行工具并记录结果，以 budget 状态结束。</label>
+            <label><input type="radio" name="q3" value="complete">执行工具后标记 completed，因为工具成功了。</label>
+            <p class="feedback quiz-result" id="q3-feedback"></p>
+          </fieldset>
+          <button type="submit" class="primary">检查答案</button>
+          <p id="quiz-summary" class="feedback" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section id="review" aria-labelledby="review-heading">
+        <h2 id="review-heading"><span class="section-number">08</span>提交与评审</h2>
+        <p>完成后，把改动和测试结果交给我，并附上三句话：为什么工具请求也要进入历史；为什么工具执行成功不等于任务完成；你为控制循环增加了什么限制，以及它会错过什么合法任务。</p>
+        <p>评审先检查行为是否符合约定，再看错误边界和结构是否清楚。测试通过之后，还需要解释一个变化场景：同一条 assistant 消息提出两个工具请求，其中一个失败时，下一次模型应当看到哪些消息？</p>
+        <div class="note"><p class="note-label">本课完成标准</p><p>你自己的实现通过实验测试；你能逐条解释正常、工具错误和预算耗尽三条轨迹；你能区分 pi 的实际行为与本课的教学简化。参考实现能运行或模拟器能播放，都不能替代这三个条件。</p></div>
+        <p>下一课将把重点放在工具协议：模型返回的参数能否直接执行、未知工具如何处理，以及调用 ID 在更复杂的交互中怎样保持一致。该课目前仍在计划中。</p>
+        <a href="../index.html#map">返回完整课程地图 →</a>
+      </section>
+      <footer>源码基线：1be312b46abe45d3914743a4d7837ebaf534d390 · 页面与实验使用模拟模型。源码静态阅读、程序测试与真实模型效果是不同层次的证据。</footer>
+    </main>
+  </div>
+</body>
+</html>
