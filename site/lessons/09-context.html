@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>09 · 上下文选择与压缩 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
+<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p><nav aria-label="本课导航"><a href="#problem">删掉了哪条约束</a><a href="#trace">比较三种策略</a><a href="#mechanism">预算与完整交互</a><a href="#source">pi 的切分与摘要</a><a href="#lab">实验与提示</a><a href="#tradeoffs">成本与信息损失</a><a href="#review">自测与评阅</a></nav></aside>
+<main id="main">
+<header><p class="eyebrow">09 / 上下文管理</p><h1>省下的上下文，可能正是下一步的条件</h1><p class="lead">用户第一句说“必须保留端口 8080”。随后工具返回几千行日志，最后用户问“现在应该使用哪个端口？”只保留最新消息很省空间，却把答案的依据删掉了。本课用同一份历史比较全量、裁剪与摘要，观察省了什么，又丢了什么。</p><div class="meta"><span>先修：第 08 课</span><span>实验：确定性上下文变换</span><span>字符预算，不冒充 token 计量</span></div></header>
+<section id="problem">
+<h2>模型窗口是输入限制，也是选择问题</h2>
+<p>第 08 课的日志可以一直追加，模型的一次请求却不能无限增长。请求不仅包括历史，还包括系统提示、工具声明、检索内容，通常还要给输出留下空间。因此“磁盘存得下”不能推出“下一次模型调用发得出去”。</p>
+<p>先把问题缩小到一个可检查的条件：在 300 个序列化字符的教学预算内，如何保留“端口必须是 8080”？全量历史保留证据但超预算；裁剪最近轮次符合预算但失去约束；摘要可能两者兼顾，也可能漏掉数字。我们要分别检查长度与信息，不能拿长度变短当成质量变好。</p>
+<pre><code>原始记录：约束 8080 → 大段日志 → 已记录 → 用户追问端口
+全量视图：约束 8080 → 大段日志 → 已记录 → 用户追问端口
+裁剪视图：                                  用户追问端口
+摘要视图：摘要「必须保留 8080」          → 用户追问端口</code></pre>
+<p>预测：若摘要写成“用户要求保持兼容”，程序会报告什么？它可能符合长度和格式检查，却没有保存端口。语义遗漏需要针对任务的判定；第 11 课会把这个问题变成固定评测案例。</p>
+</section>
+<section id="trace">
+<h2>先观察长度，再检查依赖</h2><p>这是教学状态模拟，数值用于说明预算，不是实际 token 或耗时。终端 demo 会用真实 JavaScript 序列化长度比较同一份固定历史。</p>
+<div class="simulator" data-walkthrough><script type="application/json" class="walkthrough-data">{"scenarios":[{"id":"trim","label":"裁剪：请求变短，条件消失","steps":[{"title":"保留全部","detail":"原始日志不变；当前请求视图包含全部材料，但超过教学预算。","state":{"visible":["端口必须8080","大量日志","追问端口"],"status":"over_budget","originalLog":"保留"}},{"title":"删除完整旧轮次","detail":"工具请求和结果一起离开当前视图，协议仍然合法；兼容约束也被删掉。","state":{"visible":["追问端口"],"status":"ready","contains8080":false,"originalLog":"仍保留"}},{"title":"检查结果含义","detail":"ready 只表示本课字符预算和协议满足，不表示模型有足够证据答对。","state":{"protocol":"合法","budget":"满足","evidence":"缺少端口依据"}}]},{"id":"summary","label":"摘要：保留来源，失败不覆盖","steps":[{"title":"选出摘要来源","detail":"最近一轮保留，前面的完整轮次交给摘要器。","state":{"sourceIndexes":[0,1,2,3],"keepIndexes":[4],"originalLog":"保留"}},{"title":"生成派生内容","detail":"摘要记录端口约束，并保存来源索引；来源索引能回查，但不自动证明摘要准确。","state":{"summary":"必须保留端口8080","sourceIndexes":[0,1,2,3],"visible":["历史摘要","追问端口"]}},{"title":"处理失败分支","detail":"如果摘要器超时、返回空文本或结果太长，不能悄悄写入一个成功检查点。","state":{"onFailure":"summary_failed / over_budget","sendModelRequest":false,"originalLog":"保持原样"}}]},{"id":"large-turn","label":"当前轮太大：不能硬切工具结果","steps":[{"title":"当前轮读到大文件","detail":"单独这轮已经超预算；裁剪更早的轮次没有帮助。","state":{"currentTurn":["用户任务","assistant read call-1","tool call-1: 大内容"],"status":"over_budget"}},{"title":"保留协议边界","detail":"不能只保留最后的 tool 消息。应收窄读取范围、在工具层截断并标记，或设计允许轮内摘要的策略。","state":{"action":"停止本次请求并改策略","orphanToolResult":false}}]}]}</script></div>
+</section>
+<section id="mechanism">
+<h2>先定义可发送的历史，再决定删多少</h2>
+<h3>整轮保留是一条明确的教学规则</h3><p>本课把一个 user 消息及到下一个 user 消息之前的所有 assistant、tool 消息视为一轮。裁剪从最新轮次向前增加，直到再加一轮就超预算。这样不会把工具请求和结果拆开；同时承认代价：若一轮特别长，这个简单策略无法继续缩小。</p><p>在删消息之前，先校验输入中的工具关联。否则一个原本孤立的工具结果，可能因为恰好被裁掉而“通过检查”，把上游错误藏起来。当前上下文必须是第 08 课投影得到的完整消息，不包括待人工核对的残缺调用。</p>
+<h3>预算单位必须能复查</h3><p>实验使用 <code>JSON.stringify(messages).length</code>，它计算 JavaScript UTF-16 代码单元，连 JSON 的键名和括号都算进去。这让测试不依赖某个 tokenizer，但不能拿来计算 API 费用，也不能保证真实模型的窗口上限。英文、中文、emoji 与不同 provider 的编码差异都使“一个字符等于一个 token”不成立。</p><p>真实接入时要保留 provider 返回的 usage，并为完整请求的系统提示、工具声明和输出预留预算。我们的函数只处理历史消息视图。返回 <code>ready</code> 表示满足本课约定，不表示整个 HTTP 请求已通过 provider 的限制。</p>
+<h3>摘要是派生材料，原始证据不能被覆盖</h3><p>摘要器接收较早的完整轮次，返回文本。本课将文本明确标为历史摘要，放在最近轮次之前，并保存 <code>sourceIndexes</code>。这些索引相对于本次输入；接到会话日志后，应映射到稳定记录 ID，这样以后裁剪或分支时还找得到原文。</p><p>摘要器失败时，函数返回 <code>summary_failed</code> 和未改变的原历史。摘要生成成功但仍超预算，返回 <code>over_budget</code>。调用方只有拿到 <code>ready</code> 才能发送请求。取消信号保持为取消异常，不伪装成一个可继续使用的摘要结果。</p><p>“有来源”也不等于“忠于来源”。摘要可能把否定句改成肯定句、漏掉版本号或把未完成工作写成已完成。必须用任务中的关键问题检验它；若问题需要精确数值，保留原始短证据往往比再概括一句更稳妥。</p>
+</section>
+<section id="source">
+<h2>pi 把压缩拆成准备、生成与会话投影</h2><p>固定版本 <code>1be312b46</code> 的 <code>compaction.ts</code> 与上一课的会话管理文件均已完整静态阅读。下列路径解释实际控制流，未把这些源码当作本课程已经运行过的性能实验。</p>
+<ol><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/compaction/compaction.ts:196:1"><code>estimateContextTokens</code></a> 优先利用最近的有效 usage，再估算后续消息；<a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/compaction/compaction.ts:227:1">投影估算</a>还考虑后续编辑或压缩会使旧 usage 失去代表性。</li><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/compaction/compaction.ts:267:1"><code>shouldCompact</code></a> 根据窗口与预留量判断触发；这与我们的硬字符上限是不同策略。</li><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/compaction/compaction.ts:446:1"><code>findCutPoint</code></a>展示切分边界；<a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/compaction/compaction.ts:859:1"><code>prepareCompaction</code></a>使用投影后的消息寻找边界，准备较早历史与可能被切开的轮次前缀。</li><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/compaction/compaction.ts:952:1"><code>compact</code></a>生成摘要，需要时分别处理较早历史与当前轮次前缀，再合成结果。</li><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/compaction/compaction.ts:585:1"><code>getSummarizationFailure</code></a>拒绝错误或达到输出上限的不完整摘要；后续逻辑也拒绝摘要响应中的工具调用。</li><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:1263:1">会话追加压缩条目</a>后，新的模型投影使用摘要与保留区间；旧原始条目不因压缩而删除。</li></ol>
+<p>教学简化：pi 能在合法边界切开一轮，并对该轮前缀生成额外摘要；本课先保留整轮，减少需要同时推理的状态。工程取舍是实现和测试更清楚，但超长单轮必须停止或另设策略。源码中的字符启发式估算也不应被当作所有语言、所有 provider 上的计量保证。</p><p>Anthropic 的<a href="https://www.anthropic.com/research/effective-context-engineering-for-ai-agents">上下文工程文章</a>讨论了摘要与按需读取的用途。这里把它作为策略来源；是否改善你自己的任务，要由同任务、同模型配置的比较实验验证。</p>
+</section>
+<section id="lab">
+<h2>对同一历史实现三种请求视图</h2><p>打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/09-context/exercise.ts:1:1">学生入口</a>。先实现 full，再实现 trim，最后处理 summary 和失败。你不用编写 tokenizer 或 HTTP 客户端。</p><pre><code>npm run lab -- 09 test
+npm run lab -- 09 verify
+npm run lab -- 09 demo</code></pre><p>初始八项学生检查均因 TODO 失败。独立参考实现通过只证明课程脚手架可用。demo 的摘要器按规则复制首条约束，它是透明的教学替身，不具备通用摘要能力，也没有真实模型费用。</p><ul><li>full：保留原消息并报告长度与是否超预算。</li><li>trim：只移除完整旧轮次，返回保留与省略的输入索引。</li><li>summary：全量超预算时才请求摘要；来源范围与最近轮次明确分开。</li><li>失败、空摘要、超长摘要、取消分别有可解释结果；输入数组始终保持不变。</li></ul>
+<details><summary>提示 1 · 不要先从数组尾部数 N 条</summary><p>先找所有 user 消息的起点。后一个起点以前是前一轮的完整范围。每次用候选的整个后缀计算预算，最少也要保留最新轮次。</p></details><details><summary>提示 2 · “够短”应该在哪一步检查</summary><p>原历史先检查；裁剪后的候选再检查；摘要组合后还要再检查一次。摘要器接收预算并不保证返回内容一定满足预算。</p></details><details><summary>提示 3 · 错误分支也要返回证据</summary><p>摘要失败时不要把原数组替换成空数组，也不要把“摘要失败”当作历史摘要送给模型。保留原历史和明确状态，让调用者停止或选择其他策略。</p></details>
+<p>完成后对照 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/solutions/09-context.ts:1:1">参考实现</a>。再添加一条“不能改数据库格式”的条件，观察只复制首条约束的固定摘要器会漏掉什么。这个新增反例应进入你的评阅材料。</p>
+</section>
+<section id="tradeoffs">
+<h2>什么时候换策略</h2><div class="table-scroll"><table><thead><tr><th>策略</th><th>适合的约束</th><th>主要代价</th></tr></thead><tbody><tr><td>发送全部历史</td><td>任务短、窗口足够，先建立最容易解释的基线。</td><td>请求增长，成本与延迟可能上升；更多内容也不保证更容易找到关键信息。</td></tr><tr><td>裁剪完整旧轮次</td><td>旧信息明确无关，当前任务相对独立。</td><td>跨轮约束可能消失。需要测试证据问题，不能只看协议合法。</td></tr><tr><td>保留摘要与来源</td><td>旧任务状态需要继续，但大量原输出已冗余。</td><td>额外调用与延迟，内容有损；摘要失败需要回退或停止。</td></tr><tr><td>按需读取原文</td><td>能用路径、ID 或查询定位具体证据。</td><td>增加工具往返，模型可能找错位置；索引质量与更新也要维护。</td></tr></tbody></table></div><p>这里没有直接引入 embedding。只有当路径、关键词和结构化索引无法找回需要的材料时，才值得用具体失败集比较语义检索。任何检索方案仍要把返回内容接回来源，不能用“相似”替代“支持结论”。</p>
+</section>
+<section id="review">
+<h2>自测与评阅</h2><details><summary>ready 是否意味着真实 HTTP 请求一定不会超模型窗口？</summary><p>不能。它只验证本课序列化字符预算。真实请求还包含系统提示、工具声明、provider 格式与输出预留，而且 token 化方式不同。</p></details><details><summary>为什么不能保留最后一条 tool，删掉前面的 assistant？</summary><p>tool 结果靠 callId 关联 assistant 请求。拆掉请求后，provider 可能拒绝历史，模型也失去了结果对应的动作。</p></details><details><summary>摘要失败时回退原历史，是否应该立即照常发模型？</summary><p>不能。原历史可能仍超预算。函数返回原历史是保护证据，不是批准发送；调用者必须检查 status。</p></details><p>提交代码、八项测试输出和三种策略的实际结果。说明旧约束何时消失、摘要从哪些索引产生，以及当前轮次太长时为什么选择明确停止。再设计一个格式检查通过、语义却错误的摘要作为反例。</p><a href="../index.html#map">返回课程地图 →</a></section>
+<footer>pi 源码基线 1be312b46；本课摘要器为固定规则。字符长度实测、provider token 用量与任务质量是三类不同证据。</footer>
+</main></div></body></html>
