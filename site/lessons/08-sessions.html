@@ -2,19 +2,78 @@
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>08 · 会话保存与恢复 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
 <body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
-<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p><nav aria-label="本课导航"><a href="#problem">退出以后还知道什么</a><a href="#trace">单步恢复</a><a href="#mechanism">日志、分支、投影</a><a href="#source">沿源码核对</a><a href="#lab">动手实验</a><a href="#tradeoffs">取舍与故障窗口</a><a href="#review">自测与评阅</a></nav></aside>
-<main id="main"><header><p class="eyebrow">08 / 会话与恢复</p><h1>恢复对话，不等于重放操作</h1><p class="lead">Agent 已经把文件改好了，随后在写入“修改成功”之前退出。重启时只看到工具请求，没有工具结果。再执行一次可能重复修改；假定成功又可能把失败说成完成。本课先保存已知事实，再明确保留未知。</p><div class="meta"><span>先修：第 07 课</span><span>实验：真实本地 JSONL 文件</span><span>不调用模型</span></div></header>
-<section id="problem"><h2>先区分三个问题</h2><p>会话日志回答“运行时记录过什么”；投影回答“这次给模型看什么”；工具执行器回答“现在要对外部世界做什么”。这三者有关联，但不能合成一个“恢复”按钮后就忽略差异。读日志如果直接触发工具，打开历史页面都可能再次改文件。</p><pre><code>1. 追加 assistant：edit("version = 1", "version = 2")
+<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p>
+<nav aria-label="本课导航"><a href="#problem">退出以后还知道什么</a><a href="#trace">单步恢复</a><a href="#mechanism">日志、分支、投影</a><a href="#source">沿源码核对</a><a href="#lab">动手实验</a><a href="#tradeoffs">取舍与故障窗口</a><a href="#review">自测与评阅</a></nav>
+</aside>
+<main id="main"><header><p class="eyebrow">08 / 会话与恢复</p>
+<h1>恢复对话，不等于重放操作</h1>
+<p class="lead">Agent 已经把文件改好了，随后在写入“修改成功”之前退出。重启时只看到工具请求，没有工具结果。再执行一次可能重复修改；假定成功又可能把失败说成完成。本课先保存已知事实，再明确保留未知。</p>
+<div class="meta"><span>先修：第 07 课</span><span>实验：真实本地 JSONL 文件</span><span>不调用模型</span></div></header>
+<section id="problem"><h2>先区分三个问题</h2>
+<p>会话日志回答“运行时记录过什么”；投影回答“这次给模型看什么”；工具执行器回答“现在要对外部世界做什么”。这三者有关联，但不能合成一个“恢复”按钮后就忽略差异。读日志如果直接触发工具，打开历史页面都可能再次改文件。</p>
+<pre><code>1. 追加 assistant：edit("version = 1", "version = 2")
 2. edit 修改磁盘文件
 3. 追加 tool：修改成功
-                  ↑ 若在 2 和 3 之间退出，日志缺少结果</code></pre><p>先预测：重开时能否判断第 2 步已经完成？仅凭这份日志不能。它也可能在第 1 步之后、第 2 步之前退出。这两个外部状态，对日志而言完全相同。因此本课把这类调用标成 <code>needs_review</code>，要求检查实际文件，再由操作者决定补记、放弃或明确重试。</p><div class="note"><p>这是恢复语义，不是异常提示的措辞。只要文件修改和日志追加没有共同事务，“先记请求、后记结果”就留有不确定窗口。调用 ID 能关联消息，不能自动保证副作用只发生一次。</p></div></section>
-<section id="trace"><h2>观察同一份记录怎样产生不同上下文</h2><p>下面是教学模拟。切换“未完成操作”和“分支”后，先预测下一步，再单步查看日志与模型上下文的区别。编号代表记录 ID，不是时间戳。</p>
+                  ↑ 若在 2 和 3 之间退出，日志缺少结果</code></pre><p>先预测：重开时能否判断第 2 步已经完成？仅凭这份日志不能。它也可能在第 1 步之后、第 2 步之前退出。这两个外部状态，对日志而言完全相同。因此本课把这类调用标成 <code>needs_review</code>，要求检查实际文件，再由操作者决定补记、放弃或明确重试。</p>
+<div class="note"><p>这是恢复语义，不是异常提示的措辞。只要文件修改和日志追加没有共同事务，“先记请求、后记结果”就留有不确定窗口。调用 ID 能关联消息，不能自动保证副作用只发生一次。</p>
+</div></section>
+<section id="trace"><h2>观察同一份记录怎样产生不同上下文</h2>
+<p>下面是教学模拟。切换“未完成操作”和“分支”后，先预测下一步，再单步查看日志与模型上下文的区别。编号代表记录 ID，不是时间戳。</p>
 <div class="simulator" data-walkthrough><script type="application/json" class="walkthrough-data">{"scenarios":[{"id":"uncertain","label":"结果缺失：暂停恢复","steps":[{"title":"先保存请求","detail":"请求说明模型提出过什么，不证明工具已经运行。","state":{"log":["u: 把版本改成2","a(parent=u): edit call-1"],"externalFile":"尚未观察"}},{"title":"重开日志","detail":"call-1 没有结果；把整个未完成交互留在日志，但不把残缺工具消息发送给模型。","state":{"status":"needs_review","modelMessages":["u"],"pending":["call-1"],"toolExecutionsOnResume":0}},{"title":"人工核对后补记","detail":"操作者实际查看文件再补记结果。不能仅根据模型文字补成成功。","state":{"log":["u","a","t(parent=a): 已核对版本为2"],"status":"ready","modelMessages":["u","a","t"]}}]},{"id":"branch","label":"新分支：保留旧回答","steps":[{"title":"原先的回答","detail":"日志是追加树：每条记录都有 id 与 parentId。","state":{"log":["u(parent=null)","a(parent=u): 旧方案"],"leaf":"a","modelMessages":["u","a"]}},{"title":"回到用户输入","detail":"branch(u) 只改内存叶节点，不删除 a，也不撤销旧方案可能造成的文件修改。","state":{"log":["u","a"],"leaf":"u","modelMessages":["u"]}},{"title":"追加替代方案","detail":"新记录 b 指向 u；重开时从最后一条记录 b 沿父链回溯。","state":{"log":["u(parent=null)","a(parent=u)","b(parent=u): 新方案"],"leaf":"b","modelMessages":["u","b"]}}]}]}</script></div></section>
-<section id="mechanism"><h2>日志保留事实，投影选择视图</h2><h3>JSONL 为什么适合第一版</h3><p>JSONL 是每行一个 JSON 对象的文本格式。追加一条消息不必重写整个历史；终端也能逐行观察。代价是读文件时要处理不完整尾行、版本与 ID 关联。这里不把它当数据库：单个进程拥有一个日志，多个进程不能同时打开写入。</p><pre><code>{"version":1,"id":"u","parentId":null,"message":{"role":"user","content":"检查项目"}}
-{"version":1,"id":"a","parentId":"u","message":{"role":"assistant","content":"完成","toolCalls":[]}}</code></pre><p><code>id</code> 标识一条记录；<code>parentId</code> 表示它接在哪条记录之后。按文件顺序直接拼消息会混入其他分支。正确投影先找到选定叶节点，沿父链回到根，再反转为时间顺序。索引是按 ID 查找的映射，构建一次后每一步查找不需要扫描整个数组。</p><h3>为什么不能把缺结果的请求直接删掉</h3><p>从发送给模型的上下文中暂时排除残缺交互，目的是满足消息协议；从原日志中删除它，则会失去“可能发生过修改”的证据。本课同时返回安全消息和 <code>pending</code>。一批工具只完成部分时，已完成结果仍保留在原日志；整个批次暂不进入模型历史，缺失的调用列为待核对。</p><p>投影也拒绝孤立结果、重复结果、缺失父节点和父链循环。类型检查只能约束编写程序时的对象；磁盘 JSON 是另一个输入边界，需要验证数据形状。记录格式合法之后，还要验证结果是否对应当前未完成请求。</p><h3>半行与中间坏行采取不同处理</h3><p>本课规定换行才代表完整记录。没有换行的尾部可能是中断写入，通过 <code>recoverSession(source, newPath)</code> 将之前的完整记录复制到新文件；原文件保留，目标已存在就拒绝覆盖。中间有一条完整但损坏的行，则直接报错。跳过它可能让后面的父节点或工具关联失真，不能悄悄恢复成“看起来正常”的历史。</p></section>
-<section id="source"><h2>pi 的会话调用路径</h2><p>以下是固定版本 <code>1be312b46</code> 的静态源码事实；本课没有运行 pi 的恢复测试。先读数据路径，再对比教学程序的不同策略。</p><ol><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:1214:1"><code>SessionManager.appendMessage</code></a> 建立 ID、父节点、时间戳，交给 <code>_appendEntry</code>。</li><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:1169:1"><code>_persist</code> 与追加失败处理</a>：首次有用户或助手消息时写文件，之后追加；失败会恢复相应的内存索引与叶节点。</li><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:1589:1"><code>branch</code></a> 移动叶节点；旧记录仍在文件中。</li><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:543:1"><code>buildSessionProjection</code></a> 组合当前路径、压缩边界与上下文编辑；<code>buildSessionContext</code> 提取最终消息。不是所有日志记录都会进入模型请求。</li><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:627:1"><code>loadEntriesFromFile</code></a> 逐块读取，跳过无法解析的行，验证头部后处理尾部换行。与本课“中间坏行报错、恢复到新文件”的约定不同。</li></ol><p>工程分析：追加树让探索其他回答无需丢弃旧路径；代价是每次读取要明确“所有记录”和“当前上下文”的差别。这个机制不是文件系统版本控制；切换消息分支不会自动把工作目录恢复到当时状态。</p><p>DeepSeek Harness 的架构也区分持久会话事件与实时 UI 事件，模型历史由日志投影得到。第 10 课会固定其源码版本并比较插件职责；此处只使用其<a href="https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/architecture.md">官方架构文档</a>说明这条概念边界，不声称两个项目提供相同的崩溃恢复保证。</p></section>
-<section id="lab"><h2>写出分支投影</h2><p>打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/08-sessions/exercise.ts:1:1">学生入口</a>。磁盘读写脚手架已提供，你实现 <code>projectSession(entries, leafId)</code>。函数只做投影，绝不执行工具。</p><pre><code>npm run lab -- 08 test
+<section id="mechanism"><h2>日志保留事实，投影选择视图</h2>
+<h3>JSONL 为什么适合第一版</h3>
+<p>JSONL 是每行一个 JSON 对象的文本格式。追加一条消息不必重写整个历史；终端也能逐行观察。代价是读文件时要处理不完整尾行、版本与 ID 关联。这里不把它当数据库：单个进程拥有一个日志，多个进程不能同时打开写入。</p>
+<pre><code>{"version":1,"id":"u","parentId":null,"message":{"role":"user","content":"检查项目"}}
+{"version":1,"id":"a","parentId":"u","message":{"role":"assistant","content":"完成","toolCalls":[]}}</code></pre><p><code>id</code> 标识一条记录；<code>parentId</code> 表示它接在哪条记录之后。按文件顺序直接拼消息会混入其他分支。正确投影先找到选定叶节点，沿父链回到根，再反转为时间顺序。索引是按 ID 查找的映射，构建一次后每一步查找不需要扫描整个数组。</p>
+<h3>为什么不能把缺结果的请求直接删掉</h3>
+<p>从发送给模型的上下文中暂时排除残缺交互，目的是满足消息协议；从原日志中删除它，则会失去“可能发生过修改”的证据。本课同时返回安全消息和 <code>pending</code>。一批工具只完成部分时，已完成结果仍保留在原日志；整个批次暂不进入模型历史，缺失的调用列为待核对。</p>
+<p>投影也拒绝孤立结果、重复结果、缺失父节点和父链循环。类型检查只能约束编写程序时的对象；磁盘 JSON 是另一个输入边界，需要验证数据形状。记录格式合法之后，还要验证结果是否对应当前未完成请求。</p>
+<h3>半行与中间坏行采取不同处理</h3>
+<p>本课规定换行才代表完整记录。没有换行的尾部可能是中断写入，通过 <code>recoverSession(source, newPath)</code> 将之前的完整记录复制到新文件；原文件保留，目标已存在就拒绝覆盖。中间有一条完整但损坏的行，则直接报错。跳过它可能让后面的父节点或工具关联失真，不能悄悄恢复成“看起来正常”的历史。</p>
+</section>
+<section id="source"><h2>pi 的会话调用路径</h2>
+<p>以下是固定版本 <code>1be312b46</code> 的静态源码事实；本课没有运行 pi 的恢复测试。先读数据路径，再对比教学程序的不同策略。</p>
+<ol><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:1214:1"><code>SessionManager.appendMessage</code></a> 建立 ID、父节点、时间戳，交给 <code>_appendEntry</code>。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:1169:1"><code>_persist</code> 与追加失败处理</a>：首次有用户或助手消息时写文件，之后追加；失败会恢复相应的内存索引与叶节点。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:1589:1"><code>branch</code></a> 移动叶节点；旧记录仍在文件中。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:543:1"><code>buildSessionProjection</code></a> 组合当前路径、压缩边界与上下文编辑；<code>buildSessionContext</code> 提取最终消息。不是所有日志记录都会进入模型请求。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/session-manager.ts:627:1"><code>loadEntriesFromFile</code></a> 逐块读取，跳过无法解析的行，验证头部后处理尾部换行。与本课“中间坏行报错、恢复到新文件”的约定不同。</li>
+</ol><p>工程分析：追加树让探索其他回答无需丢弃旧路径；代价是每次读取要明确“所有记录”和“当前上下文”的差别。这个机制不是文件系统版本控制；切换消息分支不会自动把工作目录恢复到当时状态。</p>
+<p>DeepSeek Harness 的架构也区分持久会话事件与实时 UI 事件，模型历史由日志投影得到。第 10 课以固定 commit f3803c9 比较插件职责；此处使用其<a href="https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/docs/architecture.md">官方架构文档</a>说明这条概念边界，不声称两个项目提供相同的崩溃恢复保证。</p>
+</section>
+<section id="lab"><h2>写出分支投影</h2>
+<p>打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/08-sessions/exercise.ts:1:1">学生入口</a>。磁盘读写脚手架已提供，你实现 <code>projectSession(entries, leafId)</code>。函数只做投影，绝不执行工具。</p>
+<pre><code>npm run lab -- 08 test
 npm run lab -- 08 verify
-npm run lab -- 08 demo</code></pre><p><code>test</code> 检查学生函数，初始 TODO 应失败；<code>verify</code> 检查独立参考答案；<code>demo</code> 实际写入并重开临时日志。三者没有模型费用。测试中的日志 I/O 检查运行已提供的脚手架，其通过不能代替学生投影通过。</p><ul><li>空叶节点返回空历史；未知 ID 和循环父链报错。</li><li>选定路径里，每个工具结果只能消耗一个已有调用 ID。</li><li>当前批次全部完成才进入完整模型历史；否则返回 <code>needs_review</code> 和缺失调用。</li><li>保持输入记录不变，保留旧分支；不得把未完成请求自动重试。</li></ul><details><summary>提示 1 · 先手画四条记录</summary><p>令 u 的父节点为空，a 与 b 的父节点均为 u，t 的父节点为 a。从 t 回溯只能得到 u、a、t。数组中 b 的位置不应该改变结果。</p></details><details><summary>提示 2 · 用集合检查哪些结果还没来</summary><p>读到 assistant 时登记本批调用。读到 tool 时必须找到并移除对应 ID。最后集合不空时，从本批 assistant 开始的消息都暂不提交给模型。</p></details><details><summary>提示 3 · 不确定性要体现在返回值</summary><p>不要返回“已恢复成功”同时偷偷删掉调用。让调用方必须检查 status，pending 保存仍未知的请求。第 12 课将在这里暂停 CLI 恢复。</p></details><p>比较答案时打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/solutions/08-sessions.ts:1:1">独立参考实现</a>；重点看它为何先写盘再更新内存，以及发生 I/O 错误后为什么拒绝继续写入。</p></section>
-<section id="tradeoffs"><h2>持久化承诺要说到具体故障</h2><div class="table-scroll"><table><thead><tr><th>选择</th><th>收益</th><th>代价或未覆盖边界</th></tr></thead><tbody><tr><td>追加 JSONL，而不是重写数组</td><td>保留路径与原始证据，容易检查每次新增记录。</td><td>需要版本、父链和损坏处理；加载时间随日志增长。</td></tr><tr><td>单进程、同步写入并 fsync 文件</td><td>在这个小实验里写入次序明确，返回前请求刷新文件内容。</td><td>阻塞事件循环；没有跨进程锁，也没有把新目录项或外部副作用纳入事务。</td></tr><tr><td>未知结果交给人工核对</td><td>避免盲目重复修改，保留真实的不确定性。</td><td>恢复不能全自动。若需要自动化，要设计幂等操作、外部事务或可核对的业务标识。</td></tr><tr><td>分支只改变消息路径</td><td>可以比较不同方案，旧讨论仍可查阅。</td><td>磁盘代码不随消息回滚，需要 Git 或独立工作目录管理。</td></tr></tbody></table></div><p>“恰好执行一次”是对外部效果的承诺，不能从“每个调用都有唯一 ID”推出。若工具是向远端付款，必须由远端支持幂等键或事务核对；把调用 ID 写进本地日志并不能补出这种能力。本课只在本地文件示例上讨论机制。</p></section>
-<section id="review"><h2>自测与提交评阅</h2><details><summary>日志最后一条是 edit 请求。为什么不直接重试？</summary><p>工具可能已经修改文件，只是结果尚未写入日志。应先检查外部状态；自动重试会把“结果未知”错误地当作“操作未发生”。</p></details><details><summary>文件中共有 10 条消息，当前分支只有 6 条。发给模型几条？</summary><p>从当前叶节点沿父链选择，再执行工具配对和上下文策略。10 是原始记录数量，不是模型上下文数量；6 条中若有未完成工具批次，还不能全部发送。</p></details><details><summary>branch 后立即退出，能保证重开仍在该位置吗？</summary><p>本课不能。branch 只改内存叶节点，只有下一次 append 的 parentId 把选择写进日志。若产品需要持久保存光标位置，就应增加明确记录或元数据，而不是在文档中暗示已有。</p></details><p>提交学生实现、测试结果，以及三个退出位置的预期：工具执行前、工具执行后但结果未保存、结果保存后。每个位置分别写清“知道什么”“不知道什么”“恢复能做什么”。再解释中间坏行和尾部半行为什么采用不同策略。</p><p>下一课在不删除这些原始记录的前提下，选择哪些信息进入模型窗口。</p><a href="../index.html#map">返回课程地图 →</a></section><footer>源码事实基于 pi 1be312b46；日志实验是本地参考实现。页面场景是教学模拟，不是断电或真实 provider 验证。</footer></main></div></body></html>
+npm run lab -- 08 demo</code></pre><p><code>test</code> 检查学生函数，初始 TODO 应失败；<code>verify</code> 检查独立参考答案；<code>demo</code> 实际写入并重开临时日志。三者没有模型费用。测试中的日志 I/O 检查运行已提供的脚手架，其通过不能代替学生投影通过。</p>
+<ul><li>空叶节点返回空历史；未知 ID 和循环父链报错。</li>
+<li>选定路径里，每个工具结果只能消耗一个已有调用 ID。</li>
+<li>当前批次全部完成才进入完整模型历史；否则返回 <code>needs_review</code> 和缺失调用。</li>
+<li>保持输入记录不变，保留旧分支；不得把未完成请求自动重试。</li>
+</ul><details><summary>提示 1 · 先手画四条记录</summary><p>令 u 的父节点为空，a 与 b 的父节点均为 u，t 的父节点为 a。从 t 回溯只能得到 u、a、t。数组中 b 的位置不应该改变结果。</p>
+</details>
+<details><summary>提示 2 · 用集合检查哪些结果还没来</summary><p>读到 assistant 时登记本批调用。读到 tool 时必须找到并移除对应 ID。最后集合不空时，从本批 assistant 开始的消息都暂不提交给模型。</p>
+</details>
+<details><summary>提示 3 · 不确定性要体现在返回值</summary><p>不要返回“已恢复成功”同时偷偷删掉调用。让调用方必须检查 status，pending 保存仍未知的请求。第 12 课将在这里暂停 CLI 恢复。</p>
+</details>
+<p>比较答案时打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/solutions/08-sessions.ts:1:1">独立参考实现</a>；重点看它为何先写盘再更新内存，以及发生 I/O 错误后为什么拒绝继续写入。</p>
+</section>
+<section id="tradeoffs"><h2>持久化承诺要说到具体故障</h2>
+<div class="table-scroll"><table><thead><tr><th>选择</th><th>收益</th><th>代价或未覆盖边界</th></tr>
+</thead><tbody><tr><td>追加 JSONL，而不是重写数组</td><td>保留路径与原始证据，容易检查每次新增记录。</td><td>需要版本、父链和损坏处理；加载时间随日志增长。</td></tr>
+<tr><td>单进程、同步写入并 fsync 文件</td><td>在这个小实验里写入次序明确，返回前请求刷新文件内容。</td><td>阻塞事件循环；没有跨进程锁，也没有把新目录项或外部副作用纳入事务。</td></tr>
+<tr><td>未知结果交给人工核对</td><td>避免盲目重复修改，保留真实的不确定性。</td><td>恢复不能全自动。若需要自动化，要设计幂等操作、外部事务或可核对的业务标识。</td></tr>
+<tr><td>分支只改变消息路径</td><td>可以比较不同方案，旧讨论仍可查阅。</td><td>磁盘代码不随消息回滚，需要 Git 或独立工作目录管理。</td></tr>
+</tbody></table></div><p>“恰好执行一次”是对外部效果的承诺，不能从“每个调用都有唯一 ID”推出。若工具是向远端付款，必须由远端支持幂等键或事务核对；把调用 ID 写进本地日志并不能补出这种能力。本课只在本地文件示例上讨论机制。</p>
+</section>
+<section id="review"><h2>自测与提交评阅</h2>
+<details><summary>日志最后一条是 edit 请求。为什么不直接重试？</summary><p>工具可能已经修改文件，只是结果尚未写入日志。应先检查外部状态；自动重试会把“结果未知”错误地当作“操作未发生”。</p>
+</details>
+<details><summary>文件中共有 10 条消息，当前分支只有 6 条。发给模型几条？</summary><p>从当前叶节点沿父链选择，再执行工具配对和上下文策略。10 是原始记录数量，不是模型上下文数量；6 条中若有未完成工具批次，还不能全部发送。</p>
+</details>
+<details><summary>branch 后立即退出，能保证重开仍在该位置吗？</summary><p>本课不能。branch 只改内存叶节点，只有下一次 append 的 parentId 把选择写进日志。若产品需要持久保存光标位置，就应增加明确记录或元数据，而不是在文档中暗示已有。</p>
+</details>
+<p>提交学生实现、测试结果，以及三个退出位置的预期：工具执行前、工具执行后但结果未保存、结果保存后。每个位置分别写清“知道什么”“不知道什么”“恢复能做什么”。再解释中间坏行和尾部半行为什么采用不同策略。</p>
+<p>下一课在不删除这些原始记录的前提下，选择哪些信息进入模型窗口。</p>
+<a href="../index.html#map">返回课程地图 →</a></section>
+<footer>源码事实基于 pi 1be312b46；日志实验是本地参考实现。页面场景是教学模拟，不是断电或真实 provider 验证。</footer></main></div></body></html>
