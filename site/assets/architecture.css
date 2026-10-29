@@ -1,0 +1,54 @@
+.architecture-atlas { --diagram-line: #88978e; }
+.architecture-atlas h3 { margin-top: 32px; }
+.architecture-location { color: var(--green); font-size: 14px; border-left: 3px solid var(--green); padding-left: 12px; }
+.architecture-current { font-size: 14px; }
+.architecture-figure { margin: 12px 0 18px; }
+.architecture-scroll { overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 6px; }
+.architecture-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.architecture-boundary { fill: none; stroke: var(--line); stroke-width: 1; }
+.architecture-boundary-label { fill: var(--muted); font: 13px system-ui, sans-serif; }
+.architecture-node rect { fill: var(--white); stroke: var(--diagram-line); stroke-width: 1; }
+.architecture-node-title { font: 16px system-ui, sans-serif; fill: var(--ink); }
+.architecture-node-note { font: 12px system-ui, sans-serif; fill: var(--muted); }
+.architecture-node.active rect { fill: var(--green-soft); stroke: var(--green); stroke-width: 2.5; }
+.architecture-node.active .architecture-node-title { font-weight: 600; }
+.architecture-edge path { stroke: var(--diagram-line); stroke-width: 1.3; }
+.architecture-edge.observation path { stroke-dasharray: 5 4; }
+.architecture-edge.active path { stroke: var(--green); stroke-width: 2.5; }
+.architecture-arrow { fill: var(--diagram-line); }
+.architecture-arrow.active { fill: var(--green); }
+.architecture-edge-label-bg { fill: var(--paper); }
+.architecture-edge-label { fill: var(--ink); font: 14px system-ui, sans-serif; }
+.architecture-edge.active .architecture-edge-label { fill: var(--green); font-weight: 600; }
+.architecture-edge-key { list-style: none; padding: 0; font-size: 13px; }
+.architecture-inspector { padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.architecture-inspector > div { margin-top: 16px; font-size: 14px; }
+.architecture-inspector p:last-child { margin-bottom: 0; }
+.architecture-step h4, .architecture-change h4, .architecture-choice h4 { margin: 0 0 12px; line-height: 1.6; font-size: 16px; font-weight: 600; }
+.architecture-step { border-left: 3px solid var(--green); padding: 10px 16px; margin: 16px 0; }
+.architecture-step p:last-child { margin: 0; }
+.architecture-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 22px; }
+.architecture-controls span { margin-left: auto; }
+.architecture-changes { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 16px; }
+.architecture-change { padding: 16px; background: var(--white); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.architecture-value { display: grid; gap: 6px; }
+.architecture-value > span { font-size: 12px; color: var(--muted); }
+.architecture-value code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.architecture-value.after code { background: var(--green-soft); }
+.architecture-state-arrow { display: block; color: var(--green); text-align: center; margin: 6px 0; font-size: 22px; }
+.architecture-tradeoff { margin: 20px 0; }
+.architecture-tradeoff > figcaption { text-align: center; font-weight: 600; margin-bottom: 30px; }
+.architecture-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; position: relative; }
+.architecture-choices::before { content: ''; position: absolute; top: -16px; left: 25%; right: 25%; border-top: 1px solid var(--diagram-line); }
+.architecture-choice { border-top: 3px solid var(--green); padding: 18px; background: var(--green-soft); position: relative; }
+.architecture-choice::before { content: '↓'; position: absolute; top: -34px; left: calc(50% - 6px); color: var(--green); }
+.architecture-choice + .architecture-choice { border-color: var(--diagram-line); background: #f1f1eb; }
+.architecture-choice p { font-size: 14px; margin-bottom: 10px; }
+.architecture-choice p:last-child { margin: 0; }
+.architecture-decision { margin-top: 16px; font-size: 14px; }
+@media (max-width: 700px) {
+  .architecture-choices { grid-template-columns: 1fr; gap: 22px; }
+  .architecture-choices::before { display: none; }
+  .architecture-choice::before { left: 18px; }
+  .architecture-changes { grid-template-columns: 1fr; }
+}

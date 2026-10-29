@@ -117,7 +117,7 @@ export const stateDiagrams = [
         { id: 'first-hook', from: 'history', to: 'hook-a', label: '消息副本' },
         { id: 'next-hook', from: 'hook-a', to: 'hook-b', label: 'A 转换后的消息' },
         { id: 'request', from: 'hook-b', to: 'model', label: '通过检查的视图' },
-        { id: 'invoke', from: 'model', to: 'execute', label: '规范化工具请求' },
+        { id: 'invoke', from: 'model', to: 'execute', label: '主循环分派工具请求' },
         { id: 'cleanup', from: 'extension', to: 'dispose', label: '注册的 dispose 函数' },
       ],
       steps: [
@@ -271,16 +271,16 @@ export const stateDiagrams = [
     focus: ['loop', 'session', 'context', 'tools', 'workspace', 'evaluation'],
     location: '完整架构 → 串起请求、工具与持久化 → 做出可检查的最小 Agent',
     summary: '毕业项目把已有模块接成一次完整任务：恢复历史、构造请求、执行工具、保存结果，再独立检查文件。重点是跨模块的先后顺序，以及中断后哪些事实仍未知。',
-    added: '先持久化工具请求再执行副作用；完整批次结束后保存结果；恢复遇到未配对请求时暂停并要求核查。',
+    added: '先持久化工具请求再执行副作用；整批结算且未取消才保存结果；恢复遇到未配对请求时暂停并要求核查。',
     deferred: '外部副作用的事务保证、跨进程并发会话、自动消除未知状态与通用沙箱。',
     flow: {
       title: '日志先记意图，结果缺失时不能推断未执行',
       caption: '图中模块在同一 Node 进程内。会话与工具分别通过文件 I/O 读写日志和工作区，语法检查使用子进程；真实模式才通过适配器发出 HTTP。正常完成与中断恢复是两条替代路径。',
       nodes: [
-        { id: 'restore', label: '恢复会话', note: 'JSONL → 会话投影', col: 0, row: 0 },
+        { id: 'restore', label: '获取会话投影', note: '启动读日志，后续投影内存记录', col: 0, row: 0 },
         { id: 'context', label: '构造请求视图', note: '扩展、上下文与预算', col: 1, row: 0 },
         { id: 'model', label: '调用模型适配器', note: '默认离线，可显式真实调用', col: 2, row: 0 },
-        { id: 'results', label: '保存整批结果', note: '等全部工具结束后追加', col: 0, row: 1 },
+        { id: 'results', label: '保存整批结果', note: '整批结算且未取消才追加', col: 0, row: 1 },
         { id: 'effects', label: '执行工具', note: '工作区文件 I/O / 子进程', col: 1, row: 1 },
         { id: 'intent', label: '先保存工具请求', note: '请求已知，结果尚未知', col: 2, row: 1 },
         { id: 'review', label: '恢复时要求核查', note: 'needs_review，不自动重放', col: 0, row: 2 },
@@ -291,7 +291,7 @@ export const stateDiagrams = [
         { id: 'request', from: 'context', to: 'model', label: 'ready 请求视图' },
         { id: 'save-intent', from: 'model', to: 'intent', label: '完整工具调用消息' },
         { id: 'execute', from: 'intent', to: 'effects', label: '落盘后调用执行器' },
-        { id: 'save-results', from: 'effects', to: 'results', label: '整批工具结果' },
+        { id: 'save-results', from: 'effects', to: 'results', label: '未取消：整批工具结果' },
         { id: 'continue', from: 'results', to: 'restore', label: '已配对历史供下一轮使用' },
         { id: 'pending', from: 'restore', to: 'review', label: '发现请求缺少结果' },
         { id: 'inspect', from: 'effects', to: 'grade', label: '运行结束后的工作区产物' },
@@ -320,7 +320,7 @@ export const stateDiagrams = [
         {
           title: '副作用与结果落盘之间有空隙',
           nodes: ['intent', 'effects'], edges: ['execute'],
-          explanation: '例如 edit 已经修好文件，但整个工具批次尚未结束，结果还没追加进日志。若此时取消或进程退出，文件变化可能存在，日志却仍只有请求。',
+          explanation: '例如 edit 已经修好文件，本批结果却还没保存。即使全部工具已经结算，只要保存前观察到取消，第 12 课也不追加本批结果。此时日志只有请求，重开后仍需核查文件；第 06 课的内存结果配对不能代替持久证据。',
           changes: [
             { name: '工作区文件', before: '等待 edit', after: '可能已被 edit 修改' },
             { name: '日志结果', before: '未记录', after: '仍未记录' },
@@ -330,7 +330,7 @@ export const stateDiagrams = [
         {
           title: '正常路径：保存结果，再继续与验收',
           nodes: ['effects', 'results', 'restore', 'grade'], edges: ['save-results', 'continue', 'inspect'],
-          explanation: '全部工具结束后，按调用顺序追加结果，下一轮才能使用这些证据。Agent 结束后，独立验收读取最终文件并执行语法检查；completed 本身不能代替验收。',
+          explanation: '正常路径中，全部工具结算并确认未取消后，才按调用顺序追加结果，下一轮才能使用这些证据。Agent 结束后，独立验收读取最终文件并执行语法检查；completed 本身不能代替验收。',
           changes: [
             { name: '日志配对', before: '请求缺少结果', after: '整批请求与结果已配对' },
             { name: '下一轮依据', before: '只有工具意图', after: '包含工具结果的历史' },

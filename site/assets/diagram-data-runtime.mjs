@@ -122,7 +122,7 @@ export const runtimeDiagrams = [
             { name: '下一请求末尾', before: 'assistant: 中文解释', after: 'assistant: 中文解释 → user: 做完再总结' },
           ] },
         { title: '对照：写入已完成，此时收到停止', nodes: ['input', 'abort', 'tools', 'stop'], edges: ['cancel-input', 'cancel-tool', 'cancel-model', 'cancel-stop'],
-          explanation: '换一条轨迹：本轮有 write 和 check，write 已知成功后发生取消。第 06 课保留成功结果，为尚未启动的 check 记录取消原因；不会再发模型请求，也不会还原文件。这不是第 08 课的崩溃恢复。',
+          explanation: '换一条轨迹：本轮有 write 和 check，write 已知成功后发生取消。第 06 课在内存历史中保留成功结果，为尚未启动的 check 记录取消原因；不会再发模型请求，也不会还原文件。第 08/12 课恢复时依据持久日志，不能照搬本课规则补写未知结果。',
           changes: [
             { name: 'signal / 运行状态', before: '未取消 / running', after: 'aborted / cancelled' },
             { name: '本轮结果', before: 'write 成功；check 未开始', after: '保留 write 成功；check 标为未执行' },
