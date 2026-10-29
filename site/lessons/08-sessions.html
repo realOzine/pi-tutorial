@@ -1,14 +1,15 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>08 · 会话保存与恢复 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>08 · 会话保存与恢复 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script><link rel="stylesheet" href="../assets/architecture.css"><script type="module" src="../assets/architecture.mjs"></script></head>
 <body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
 <aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p>
-<nav aria-label="本课导航"><a href="#problem">退出以后还知道什么</a><a href="#trace">单步恢复</a><a href="#mechanism">日志、分支、投影</a><a href="#source">沿源码核对</a><a href="#lab">动手实验</a><a href="#tradeoffs">取舍与故障窗口</a><a href="#review">自测与评阅</a></nav>
+<nav aria-label="本课导航"><a href="#atlas">本课在整体中的位置</a><a href="#problem">退出以后还知道什么</a><a href="#trace">单步恢复</a><a href="#mechanism">日志、分支、投影</a><a href="#source">沿源码核对</a><a href="#lab">动手实验</a><a href="#tradeoffs">取舍与故障窗口</a><a href="#review">自测与评阅</a></nav>
 </aside>
 <main id="main"><header><p class="eyebrow">08 / 会话与恢复</p>
 <h1>恢复对话，不等于重放操作</h1>
 <p class="lead">Agent 已经把文件改好了，随后在写入“修改成功”之前退出。重启时只看到工具请求，没有工具结果。再执行一次可能重复修改；假定成功又可能把失败说成完成。本课先保存已知事实，再明确保留未知。</p>
 <div class="meta"><span>先修：第 07 课</span><span>实验：真实本地 JSONL 文件</span><span>不调用模型</span></div></header>
+<section id="atlas" data-architecture="08"><h2>先看全局，再进入本课</h2><p>用图定位本课的职责，再沿箭头观察调用与数据变化。以下是教学示意，不能替代真实运行证据。</p></section>
 <section id="problem"><h2>先区分三个问题</h2>
 <p>会话日志回答“运行时记录过什么”；投影回答“这次给模型看什么”；工具执行器回答“现在要对外部世界做什么”。这三者有关联，但不能合成一个“恢复”按钮后就忽略差异。读日志如果直接触发工具，打开历史页面都可能再次改文件。</p>
 <pre><code>1. 追加 assistant：edit("version = 1", "version = 2")
