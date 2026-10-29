@@ -5,18 +5,21 @@
   <title>05 · 流式输出与事件 — Pi 学习手册</title>
   <link rel="stylesheet" href="../assets/course.css">
   <script type="module" src="../assets/lesson-tools.mjs"></script>
+  <link rel="stylesheet" href="../assets/architecture.css">
+  <script type="module" src="../assets/architecture.mjs"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">跳到正文</a>
 <div class="layout">
 <aside class="sidebar" aria-label="课程导航">
   <a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p>
-  <nav><a href="#problem">问题与预测</a><a href="#trace">单步观察</a><a href="#mechanism">增量与提交</a><a href="#source">pi 源码路径</a><a href="#lab">代码实验</a><a href="#tradeoffs">设计取舍</a><a href="#review">自测与评阅</a></nav>
+  <nav><a href="#atlas">本课在整体中的位置</a><a href="#problem">问题与预测</a><a href="#trace">单步观察</a><a href="#mechanism">增量与提交</a><a href="#source">pi 源码路径</a><a href="#lab">代码实验</a><a href="#tradeoffs">设计取舍</a><a href="#review">自测与评阅</a></nav>
 </aside>
 <main id="main">
 <header><p class="eyebrow">05 / STREAMING</p><h1>文字已经出现，<br>为什么还不能执行工具？</h1>
 <p class="lead">上一课能读写文件，却要等模型返回完整响应才显示进展。这一课让用户及时看到正在生成的内容，同时守住一条边界：能够展示的半成品，不一定能写进历史，更不能直接执行。</p>
 <div class="meta"><span>先修：第 04 课</span><span>实现：增量消费者</span><span>验证：离线 HTTP SSE</span></div></header>
+<section id="atlas" data-architecture="05"><h2>先看全局，再进入本课</h2><p>用图定位本课的职责，再沿箭头观察调用与数据变化。以下是教学示意，不能替代真实运行证据。</p></section>
 
 <section id="problem"><h2>从半个参数开始</h2>
 <p>模型准备调用 <code>read</code>。网络先到达 <code>{"path":</code>，过一会儿才到达 <code>"README.md"}</code>。界面可以显示“正在准备 read”，但此时 JSON 还不完整。如果你每次收到片段就执行工具，可能执行两次，也可能用默认路径执行一次错误操作。</p>
