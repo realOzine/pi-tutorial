@@ -115,3 +115,31 @@ test("wire decoder rejects invalid events and unfinished frames", async () => {
     await assert.rejects(async () => { for await (const _part of decodeSse(bytes(input), new AbortController().signal)) { /* Consume to validate. */ } }, /Invalid|Incomplete/);
   }
 });
+
+test("invalid call ordering, JSON and finish reason do not commit", async () => {
+  const cases: { values: StreamPart[]; error: RegExp }[] = [
+    { values: [{ type: "tool-start", id: "r", name: "read" }, { type: "tool-start", id: "r", name: "read" }], error: /Duplicate/ },
+    { values: [{ type: "tool-delta", id: "missing", delta: "{}" }], error: /without tool-start/ },
+    { values: [{ type: "tool-start", id: "r", name: "read" }, { type: "tool-delta", id: "r", delta: "{" }, { ...finish, stopReason: "tool_calls" }], error: /JSON|property/ },
+    { values: [{ ...finish, stopReason: "tool_calls" }], error: /does not match/ },
+    { values: [{ type: "tool-start", id: "r", name: "read" }, { type: "tool-delta", id: "r", delta: "{}" }, finish], error: /does not match/ },
+  ];
+  for (const scenario of cases) {
+    let commits = 0;
+    await assert.rejects(consume(parts(scenario.values), new AbortController().signal, (event) => { if (event.type === "commit") commits++; }), scenario.error);
+    assert.equal(commits, 0);
+  }
+});
+
+test("mid-stream abort emits no later preview or commit and closes generator", async () => {
+  const controller = new AbortController();
+  const events: StreamEvent[] = [];
+  let cleaned = false;
+  async function* source(): AsyncGenerator<StreamPart> {
+    try { yield { type: "text", delta: "a" }; yield { type: "text", delta: "b" }; yield finish; }
+    finally { cleaned = true; }
+  }
+  await assert.rejects(consume(source(), controller.signal, (event) => { events.push(event); controller.abort(); }), { name: "AbortError" });
+  assert.equal(cleaned, true);
+  assert.deepEqual(events.map((event) => event.type), ["preview"]);
+});
