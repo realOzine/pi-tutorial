@@ -52,8 +52,8 @@
 <section id="source"><h2>pi 怎样维护临时状态</h2>
 <p>阅读基线是 <code>1be312b46</code>。从 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent-loop.ts:390:1"><code>streamAssistantResponse</code></a> 开始：它先变换上下文，再调用流式模型函数，逐个处理 <code>start</code>、增量以及 <code>done/error</code>。</p>
 <p>低层循环在 start 时把临时消息放进当前上下文，后续更新替换最后一项，最后再用完整消息替换；它不是每个 delta 追加一条历史。对外的 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:575:1"><code>processEvents</code></a> 则把增量放在 <code>streamingMessage</code>，到 <code>message_end</code> 才追加到公开消息列表。读源码时先确认自己看的是哪一份状态，才能解释看似不同的操作。</p>
-<p>继续读 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:274:1"><code>subscribe</code></a> 与 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:614:1">监听器循环</a>：当前版本按订阅顺序等待监听器。<code>agent_end</code> 是最后一条事件，但直到监听器完成、运行状态清理后才真正 idle。不能把历史版本里“同步通知”的印象套到这份源码。</p>
-<p>低层 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent-loop.ts:43:1"><code>agentLoop</code></a> 返回事件流，它使用的 sink 只是把事件 push 入流；消费事件流的外部读取者是否处理完成，与 <code>Agent.subscribe</code> 的等待约定不同。这是接口语义差异，不是两种实现互相矛盾。</p>
+<p>继续读 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:275:1"><code>subscribe</code></a> 与 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:619:1">监听器循环</a>：当前版本按订阅顺序等待监听器。<code>agent_end</code> 是最后一条事件，但直到监听器完成、运行状态清理后才真正 idle。不能把历史版本里“同步通知”的印象套到这份源码。</p>
+<p>低层 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent-loop.ts:47:1"><code>agentLoop</code></a> 返回事件流，它使用的 sink 只是把事件 push 入流；消费事件流的外部读取者是否处理完成，与 <code>Agent.subscribe</code> 的等待约定不同。这是接口语义差异，不是两种实现互相矛盾。</p>
 <div class="note"><p class="note-label">事实与教学简化</p><p>以上行为来自静态源码阅读。本课只实现文字和工具参数增量，不包含 pi 的 reasoning、图片、provider usage 细节。对截断工具响应，pi 会生成工具错误结果；本课消费者先抛出错误，把恢复策略留给上层。两者都不执行可能残缺的工具参数。</p></div></section>
 
 <section id="lab"><h2>补全消费者，再验证网络边界</h2>
