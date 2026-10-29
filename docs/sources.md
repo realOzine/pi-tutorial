@@ -50,7 +50,7 @@
 固定 commit：`04d809ceab9df28f9adaed044884180159172930`。第 04 课全文阅读三处源码：
 
 - `src/minisweagent/agents/default.py`：查询、执行动作、反馈以及退出。
-- `src/minisweagent/models/utils/actions/toolcall.py`：原生 bash 工具声明、参数解析、结果关联。
+- `src/minisweagent/models/utils/actions_toolcall.py`：原生 bash 工具声明、参数解析、结果关联。
 - `src/minisweagent/environments/local.py`：`shell=True` 的子进程执行、工作目录、环境和超时处理。
 
 源码原样保存在 [本地快照](references/mini-swe-agent/README.md)，含 MIT 许可证、固定链接与 SHA-256。网页直接用 Zed 打开这些只读文本。对照说明“少量专用文件工具”和“一个通用 shell 入口”怎样改变能力与约束；没有安装、运行或评测 mini-SWE-agent，也没有把当前原生 tool calling 说成旧版正则提取。

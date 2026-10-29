@@ -15,6 +15,6 @@
 - https://github.com/SWE-agent/mini-swe-agent/blob/04d809ceab9df28f9adaed044884180159172930/src/minisweagent/agents/default.py
 - https://github.com/SWE-agent/mini-swe-agent/blob/04d809ceab9df28f9adaed044884180159172930/src/minisweagent/environments/local.py
 - https://github.com/SWE-agent/mini-swe-agent/blob/04d809ceab9df28f9adaed044884180159172930/src/minisweagent/models/utils/actions_toolcall.py
-- https://github.com/SWE-agent/mini-swe-agent/blob/04d809ceab9df28f9adaed044884180159172930/LICENSE
+- https://github.com/SWE-agent/mini-swe-agent/blob/04d809ceab9df28f9adaed044884180159172930/LICENSE.md
 
 本课比较的事实范围是默认循环、原生 bash tool-call 解析与本地执行环境。源码存在其他模型适配器与环境实现；这三份文件不能代表全部运行模式。这里只做静态源码核验，没有运行 mini-SWE-agent 的任务或测量其效果。
