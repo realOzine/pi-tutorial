@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>11 · 评测与故障分析 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
+<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p><nav aria-label="本课导航"><a href="#problem">怎样证明改进</a><a href="#trace">固定任务与故障</a><a href="#mechanism">报告与判定器</a><a href="#source">pi 的测试证据</a><a href="#lab">实验与提示</a><a href="#tradeoffs">比较的边界</a><a href="#review">自测与评阅</a></nav></aside>
+<main id="main"><header><p class="eyebrow">11 / 评测与故障分析</p><h1>有一次成功，能说明架构变好了吗？</h1><p class="lead">你把历史裁剪改成摘要，Agent 终于记住端口 8080。但这次成功也可能来自任务变简单、模型换了版本，或者判定规则太宽。本课建立可重复的比较：固定任务，保存每一次结果，分清程序运行完、任务做对和证据足够这三件事。</p><div class="meta"><span>先修：第 10 课</span><span>新增：固定评测集与逐案报告</span><span>本课默认：无模型调用</span></div></header>
+<section id="problem"><h2>先写清楚“更好”指什么</h2>
+<p>沿用第 09 课的具体问题：旧消息要求端口为 8080，中间出现大量日志，最后用户问端口。baseline 采用 trim，candidate 采用固定规则摘要。两者拿到完全相同的原始消息与预算，只改变历史处理策略。先预测：如果只检查请求是否完成，两者会不会都通过？会；完成了一个错误回答也是 completed。</p>
+<pre><code>相同任务集 + 相同运行条件
+       ├─ baseline：裁剪旧历史 → 逐案运行记录 ─┐
+       └─ candidate：摘要旧历史 → 逐案运行记录 ─┤
+                                               ↓
+                       同一判定器 → 保留失败 → 比较指标 → 阅读反例</code></pre>
+<p>这里的 judge 指判定器：它根据某条运行记录回答“是否满足本案例的要求”，并说明原因。它可以是普通断言，不必再调用一个模型。对精确端口、文件差异、测试退出码和取消后执行次数，程序断言往往更直接。对开放式解释质量，可以另加人工或模型评阅，但必须记录标准和评阅者版本。</p>
+<p>本课把评测器放在 Agent 外面。Agent 负责运行，runner 将真实运行结果映射成统一记录，judge 负责判定，report 负责保存。若让 Agent 自己用一句“我已成功完成”决定分数，就把需要验证的说法当成了验证依据。</p></section>
+<section id="trace"><h2>单步比较正常结果与故障结果</h2>
+<p>以下为教学模拟。页面中的数字是固定案例的预期判定；实际计时要运行本地 demo，不能把动画切换速度当成 Agent 延迟。</p>
+<div class="simulator" data-walkthrough><script type="application/json" class="walkthrough-data">{"scenarios":[{"id":"comparison","label":"同一任务：裁剪与摘要","steps":[{"title":"固定输入","detail":"数据、预算和判定规则相同，先只改变上下文策略。","state":{"constraint":"端口8080","history":"旧约束 + 大量日志 + 最新问题","maxCharacters":280}},{"title":"运行 baseline","detail":"裁剪保留最新问题，规则探针找不到8080；函数正常返回，但答案不满足案例。","state":{"strategy":"trim","status":"completed","answer":"unknown","passed":false}},{"title":"运行 candidate","detail":"教学摘要器复制已知首条约束，规则探针读到8080；这是证据保留检查，不是LLM能力测试。","state":{"strategy":"summary","status":"completed","answer":"8080","passed":true,"modelCalls":0}},{"title":"限制结论","detail":"只能说这个固定用例区分了两种历史策略。不能推出真实摘要不会遗漏别的约束。","state":{"supported":"固定约束在请求视图中被保留","notMeasured":["模型推理质量","真实模型延迟","付费成本"]}}]},{"id":"fault","label":"故障：正确停止也能通过","steps":[{"title":"注入坏参数","detail":"无参工具收到未知字段，应在执行之前拒绝。","state":{"arguments":{"unexpected":true},"toolCalls":0}},{"title":"记录实际状态","detail":"运行状态为error，不改写成completed；错误层为tool。","state":{"status":"error","failureLayer":"tool","trace":["validate rejected; run not called"]}},{"title":"判定预期行为","detail":"案例检查的是拒绝坏输入且没有副作用，所以judge可以通过。","state":{"judgement":{"passed":true},"completion":false}},{"title":"保存全部行","detail":"失败、预算停止、取消都在分母中。不能只保存成功日志后计算成功率。","state":{"cases":5,"candidateAssertionsPassed":5,"completedRuns":1,"costUsd":null}}]},{"id":"judge","label":"判定器自己出错","steps":[{"title":"Agent 返回结果","detail":"运行已经完成，留下自己的状态和轨迹。","state":{"status":"completed","answer":"ok"}},{"title":"judge 抛出异常","detail":"本课保守地把此案判定为未通过，同时记录Judge failed。","state":{"passed":false,"reason":"Judge failed: bad assertion"}},{"title":"不要篡改运行记录","detail":"判定失败不证明Agent执行失败，排查时先修复评测器再重跑。","state":{"runStatus":"completed","completionRate":1,"passRate":0}}]}]}</script></div></section>
+<section id="mechanism"><h2>先看逐案证据，再看平均数</h2>
+<p>打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/11-evaluation/exercise.ts:1:1">报告类型</a>。每一行保存任务 ID、运行耗时、运行状态、调用数、轨迹与判定。报告头保存代码版本、配置、provider、model、运行类型与时间。任务 ID 把失败定位到输入；配置使下一次可以复现；轨迹帮助区分模型选择、工具校验、上下文处理和运行器错误。</p>
+<div class="table-scroll"><table><thead><tr><th>指标</th><th>本课含义</th><th>常见误读</th></tr></thead><tbody>
+<tr><td>passRate</td><td>满足各自 judge 的行数 ÷ 全部行数。</td><td>包含故障注入用例时，不能称为普通任务完成率。</td></tr>
+<tr><td>completionRate</td><td>status 为 completed 的行数 ÷ 全部行数。</td><td>正常返回不证明答案正确；正确取消也不属于 completed。</td></tr>
+<tr><td>elapsedMs</td><td>单调时钟测量 runner 开始到返回或抛错；汇总为各行之和。</td><td>不含 judge 耗时，不是并发吞吐量；本地模拟不代表网络延迟。</td></tr>
+<tr><td>modelCalls / toolCalls</td><td>适配器明确记录的实际调用数；缺失时为 null。</td><td>请求意图、UI 开始事件与实际执行不是同一个计数。</td></tr>
+<tr><td>usage</td><td>明确计量的输入与输出 token；任一行未知，总量为 null。</td><td>字符预算不能直接充当 provider 的 token 用量。</td></tr>
+<tr><td>costUsd</td><td>由明确价格和计量得出的费用；任一行未知，总量为 null。</td><td>缺字段不等于免费；各 provider 的缓存等计费条件需在适配器核对。</td></tr>
+</tbody></table></div>
+<p>已知行的数据不会因为总量未知而丢失。例如某一次请求返回了 usage，另一次网络断开没有返回 usage，逐案报告仍保存前一次计量。总量留空是在说明证据不完整；把后一次填成 0 会系统性低估成本。</p>
+<h3>固定五个用例，各自观察什么</h3>
+<p><a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/11-evaluation/tasks.ts:1:1">任务与 fixture runner</a>真的调用第 09 课的上下文函数和第 10 课的工具校验函数。fixture 是可控制的本地输入与替代行为，用于稳定触发某条执行路径。</p>
+<ol><li><strong>保留端口。</strong>比较派生请求中是否保留 8080。答案来自规则探针，摘要器复制已知约束，没有 LLM 调用。</li>
+<li><strong>坏参数。</strong>向无参工具传入多余字段，检查执行前被拒绝。只断言“有错误”不够，还要检查没有进入工具执行。</li>
+<li><strong>当前轮次超限。</strong>最新用户消息已经超过字符预算，应返回预算停止，不启动模型请求。历史摘要不能缩小必须保留的新输入。</li>
+<li><strong>超时。</strong>让一个可取消的本地计时器等待超过期限，检查异常及轨迹。它模拟 provider 等待，不是一次 HTTP 超时实测。</li>
+<li><strong>取消。</strong>在下一次请求之前中止信号，检查取消向上传递且模型调用为零。不能据此推断已发送到远端的请求一定停止计费。</li></ol>
+<p>这些用例检查边界，允许预期的 error、budget、cancelled 被判定为通过。当前固定运行中，baseline 的判定为 4/5，candidate 为 5/5，两者 completed 都是 1/5；模型调用均为 0，token 与费用未计量。这个结果是本地策略回归证据，不能写成“摘要 Agent 的真实任务成功率为 100%”。</p>
+<h3>评测器也需要故障边界</h3>
+<p>runner 抛出异常时，本课生成一条 runtime 错误记录，未知调用数留为 null，然后继续后续案例。不能因第一个网络异常退出而隐藏其他失败。judge 抛出异常时保留原运行记录，另记判定失败；这提醒我们先修复判定器。空任务集与重复 ID 直接拒绝，避免出现无法解释的分数或定位冲突。</p>
+<p>本课逐案顺序执行，容易对齐轨迹和计量。它不提供强行终止任意不合作代码的隔离器。真实 runner 必须把取消信号传到模型和工具适配器；若它永远不返回，外层的 try/catch 不会自动救场。需要硬超时的进程隔离是后续工程选择。</p></section>
+<section id="source"><h2>从 pi 的回归测试学会挑观察点</h2>
+<p>以下基于 pi <code>1be312b46</code> 的完整相关文件静态阅读。本课没有运行 pi 的整套测试，也不把源码中写了断言说成当前环境已通过。课程自己的参考测试会实际执行。</p>
+<ol><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/test/suite/harness.ts:151:1"><code>createHarness</code></a>装配内存会话、真实 Agent/AgentSession 和 faux provider。受控的是模型响应，仍可让调用经过真实运行时。与只调用一个孤立 helper 相比，它能观察跨层交互；与真实模型相比，它更容易稳定触发同一路径。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/test/suite/regressions/8935-parallel-preflight-abort.test.ts:17:1">并行工具预检取消测试</a>记录真正进入工具函数的 executions。第二个预检触发取消后，断言这个数组为空。随后它仍检查两组 tool_execution_start / end 以及配对的错误结果。这个例子说明，名为 execution_start 的 UI 事件不能单独证明外部工具副作用已经发生。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/test/suite/regressions/11227-recovery-omits-tool-results.test.ts:65:1">恢复请求的工具关联测试</a>在 faux provider 收到请求时捕获实际 messages，检查被截断的 assistant 与其工具结果一起省略。观察模型边界上的最终请求，比只检查摘要函数的返回字符串更接近要保护的约束。</li></ol>
+<pre><code>pi 回归测试的一个观察链：
+受控模型响应 → AgentSession → 预检/执行/恢复 → 下次模型请求
+                       │                    │
+                 记录实际执行次数       捕获实际 messages
+
+本课评测器的观察链：
+固定任务 → runner → EvaluationRun → judge → 每案保留的 report row</code></pre>
+<p>前一条链用于证明特定执行机制没有回归，后一条链用于统一记录多个任务的结果。两者可以组合，但不能相互替代。所有协议测试通过，仍可能生成质量不好的答案；一次真实任务成功，也不能证明取消与故障路径正确。毕业项目会把本课报告器接到真正的课程运行时，复用前面的边界检查。</p></section>
+<section id="lab"><h2>实验：写一个不会美化失败的报告器</h2>
+<p>打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/11-evaluation/exercise.ts:37:1">学生 TODO</a>，实现 evaluate。保持任务定义和 runner 不变，先让每条结果被完整保存，再聚合。不要先求平均值后丢掉逐案数据。</p>
+<pre><code>npm run lab -- 11 test
+npm run lab -- 11 verify
+npm run lab -- 11 demo</code></pre>
+<p>初始六项学生检查全部失败，因为 evaluate 保留 TODO。参考 demo 输出两份完整 JSON 报告。<a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/11-evaluation/exercise.test.ts:1:1">测试</a>覆盖分母、异常、未知成本与用量、判定器错误、任务标识和固定比较；<a href="zed://file/Users/ozine/Project/learn/pi-tutorial/solutions/11-evaluation.ts:1:1">参考实现</a>用于完成后对照。</p>
+<ul><li>任何 runner 异常都要产生一行，后续任务继续运行；不能用 filter 删除失败。</li><li>每行分别保存运行状态与 judge 结果。判定器故障不篡改 Agent 的 completed。</li><li>使用单调时钟计时；明确测量 runner，不把日期时间差误当作可靠耗时。</li><li>分别汇总已知字段。只要某字段存在未知行，就把该字段总量标成 null，而不是用 <code>?? 0</code>补齐。</li><li>报告带上数据集、配置、版本与运行类型；fixture 和 live 必须能直接区分。</li></ul>
+<details><summary>提示 1 · 先不写成功率</summary><p>用顺序 for 循环逐个运行。为 runner 和 judge 各设一个错误边界，向 rows 追加完整记录。最后检查 rows.length 是否等于原始任务数，再考虑聚合。</p></details>
+<details><summary>提示 2 · 为什么一个分数不够</summary><p>“坏参数被拒绝”可以是通过的案例，但运行状态是 error。分别数 judgement.passed 与 run.status，才不会让一个概念冒充另一个。</p></details>
+<details><summary>提示 3 · unknown 怎样传播</summary><p>先检查每一行是否都有计量，再求和。若存在未知，总量不能精确计算；仍保留各行数据，供定位缺失的适配器。</p></details>
+<details><summary>提示 4 · 加一个会欺骗现有 judge 的反例</summary><p>给规则探针一条“旧端口8080已废弃，新端口9090”的消息，它只搜索8080，可能给出错误答案。新增案例应迫使你解释答案来源与最新约束；不能靠把 judge 改宽让分数回升。</p></details></section>
+<section id="tradeoffs"><h2>从可靠的回归检查走向真实效果评测</h2>
+<p>固定 fixture 的收益是复现：同样的输入会触发相同边界，失败容易定位。代价是替代行为与真实模型不同。本课固定摘要器知道首条消息就是约束，真实摘要器不具备这个先验。要评测真实效果，应保留同一任务定义，把 runner 换成真实课程 Agent，并记录完整配置、模型标识、调用计量与工作区结果。</p>
+<p>真实比较先固定任务集与判定标准，再改实现。先挑出成功样例再报告，会遗漏失败；看到结果后临时放宽 judge，也会改变比较口径。开发时可以用一组已知案例，另留未用于调试的任务检查是否只适配了这几道题。每个新增真实故障都应转成一个可重复回归案例。</p>
+<p>一轮延迟容易受网络和系统调度影响，单次 5/5 也不表达稳定性。实际运行应重复同一任务，保存每次原始记录，并同时看失败类型、耗时分布与费用。任务数量少时，先阅读具体失败，不凭小数点后很多位制造精度。若同时更换模型、摘要和工具策略，即使结果变好，也无法把收益单独归因于摘要。</p>
+<p>本课没有实现 LLM judge。它适合部分难以程序化的质量要求，但会引入评阅模型自己的偏差、随机性与费用；需要固定 rubric，保留理由，并用人工抽查校准。对于“文件是否改对”“工具是否执行了两次”这类事实，优先读取可验证产物，而不是让另一个模型猜。</p>
+<p>提交代码以后，在工作树无修改时用 <code>COURSE_REVISION=$(git rev-parse HEAD) npm run lab -- 11 demo</code>生成带版本报告。默认的 working-tree 明确表示未固定。命令中的 commit 只标识代码，不自动证明环境与数据相同；数据集版本和配置仍要保留。</p></section>
+<section id="review"><h2>自测与评阅</h2>
+<details><summary>候选方案5/5通过，为什么completed只有1/5？</summary><p>四个案例验证异常、预算或取消边界。正确停止满足判定规则，但没有生成正常完成的答案。通过率应按这个数据集的含义描述。</p></details>
+<details><summary>runner崩溃后，modelCalls可以填0吗？</summary><p>不能。它可能在崩溃前已发过请求。没有可靠计量就记录null，并保留错误，不能从“没有返回数据”推断“没有工作发生”。</p></details>
+<details><summary>所有工具都有start/end事件，能证明工具实际执行了吗？</summary><p>不能仅凭名称判断。pi的预检取消测试同时出现配对事件与零实际执行。应观察执行器内部计数、产物或其他直接证据，并理解事件的约定。</p></details>
+<details><summary>怎样知道摘要确实带来收益？</summary><p>固定任务、模型、工具、预算和判定，单独改变摘要策略；保存逐案结果并重复运行。当前本地fixture只证明特定约束保留，尚未证明真实摘要质量。</p></details>
+<p>提交实现、baseline/candidate完整报告，以及一个会让当前判定产生误判的新案例。评阅会检查：有没有隐藏失败，是否混淆完成与正确，unknown是否被改成0，结论是否超出了证据，以及新案例是否真正区分了你声称的行为。</p><a href="../index.html#map">返回课程地图 →</a></section>
+<footer>pi 1be312b46。源码测试仅静态核对；本课参考实验是本地确定性故障检查，未调用真实模型。</footer>
+</main></div></body></html>
