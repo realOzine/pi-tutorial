@@ -6,20 +6,26 @@ export async function* decodeSse(
   bytes: AsyncIterable<Uint8Array>,
   signal: AbortSignal,
 ): AsyncGenerator<StreamPart> {
+  for await (const value of decodeSseData(bytes, signal)) yield parsePart(value);
+}
+
+/** Decode JSON data frames, with a 1 MiB total response bound shared by both protocol demos. */
+export async function* decodeSseData(bytes: AsyncIterable<Uint8Array>, signal: AbortSignal): AsyncGenerator<unknown> {
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let buffer = "";
+  let received = 0;
   for await (const chunk of bytes) {
     signal.throwIfAborted();
+    received += chunk.byteLength;
+    if (received > 1_048_576) throw new Error("SSE response exceeds 1 MiB");
     buffer += decoder.decode(chunk, { stream: true });
-    // A bounded partial frame prevents an untrusted peer from buffering without limit.
-    if (buffer.length > 1_048_576) throw new Error("SSE frame exceeds 1 MiB");
     let boundary: RegExpMatchArray | null;
     while ((boundary = /\r?\n\r?\n/.exec(buffer))) {
       const frame = buffer.slice(0, boundary.index);
       buffer = buffer.slice((boundary.index ?? 0) + boundary[0].length);
       const data = frame.split(/\r?\n/).filter((line) => line.startsWith("data:"))
         .map((line) => line.slice(5).replace(/^ /, "")).join("\n");
-      if (data) yield parsePart(JSON.parse(data) as unknown);
+      if (data) yield JSON.parse(data) as unknown;
     }
   }
   buffer += decoder.decode();
