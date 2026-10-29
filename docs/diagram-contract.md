@@ -2,7 +2,7 @@
 
 每课先显示完整架构中的位置，再显示本课的局部控制/数据流和可单步的数据变化，最后用两个方案的收益与代价解释架构选择。图是教学模型，不是实测或 pi 全部内部结构的复刻。使用已有课程事实，不新增未经核验的源码结论。
 
-三个独立模块分别导出 `foundationDiagrams`（00–04）、`runtimeDiagrams`（05–08）、`stateDiagrams`（09–12）。每项结构如下：
+三个独立模块分别导出 `foundationDiagrams`（00–04）、`runtimeDiagrams`（05–08）、`stateDiagrams`（09–12）。每项结构如下；示例省略了部分步骤和状态项，完整数量约束见文末：
 
 ```js
 {
@@ -38,7 +38,7 @@
 }
 ```
 
-全局组件 ID 固定：`input`（CLI 与用户输入）、`loop`（Agent 循环）、`model`（模型适配器）、`provider`（远端模型服务）、`tools`（校验/调度/执行）、`workspace`（文件与检查子进程）、`session`（日志和恢复）、`context`（上下文视图）、`extensions`（资源/指令/hook）、`evaluation`（独立判定）。focus 表示本课关注，不代表其他模块此时全已实现。
+全局组件 ID 固定：`input`（CLI 与用户输入）、`loop`（Agent 循环）、`model`（模型适配器）、`provider`（远端模型服务）、`tools`（校验/调度/执行）、`workspace`（文件与检查子进程）、`session`（日志和恢复）、`storage`（磁盘会话文件）、`context`（上下文视图）、`extensions`（资源/指令/hook）、`evaluation`（独立判定）。focus 表示本课关注，不代表其他模块此时全已实现。评测与循环可以处于同一个 Node 进程；独立指判定标准。
 
 局部图用最多 8 个节点，`col` 为 0..2，`row` 为 0..2；同一坐标只放一个节点。节点 label 尽量不超过 12 个中文字符，note 不超过 22 字符。每条边有独立 id，每课 3–5 个步骤；步骤引用已定义节点/边，changes 为 2–3 组短的前后状态，值使用字符串。连接线标清“消息、函数调用、HTTP、I/O、取消信号”等具体含义，不能把函数模块画成独立服务。绘制与行为由根代理统一实现。
 
