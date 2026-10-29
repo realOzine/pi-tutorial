@@ -30,6 +30,16 @@ node labs/05-streaming/demo.ts
 
 `transport.ts` 是脚手架：正确处理跨网络 chunk 的 UTF-8 和 SSE 帧，对网络 JSON 做运行时校验，并限制缓冲区。它是课程定义的 SSE 数据形状，不是 OpenAI、DeepSeek 或 pi 的事件 API。真实 provider 需要自己的映射层。
 
+## 真实 OpenAI Responses 流适配
+
+`openai.ts` 提供 `createStreamingOpenAIModel(config, onEvent?)`，config 与第 03 课的 `OpenAIModelConfig` 相同，返回共享 `Model`。它复用第 03 课的请求编码和最终响应校验，发送 `stream: true`，保持 `store: false`、reasoning effort `none`、显式输出上限、超时与禁止自动重试。
+
+网络中每个 Responses 事件先经过 SSE 解码，再映射为本课增量；函数参数事件的 `item_id` 必须映射为调用结果使用的 `call_id`。`function_call_arguments.done` 只代表参数结束，只有 `response.completed` 才提交整个响应。完整响应还会与增量累积核对，避免界面与执行器看到不同内容。仅支持文本和函数工具；reasoning、图片和托管工具不在这个适配器的范围内。
+
+`openai.test.ts` 使用本地 HTTP 固定响应验证真实协议映射、流中取消、截断、响应上限和超时。运行 `node --test labs/05-streaming/openai.test.ts` 不需要密钥。真实付费验证由单独的运行入口及预算授权控制，不能从这些 fixture 推断已调用供应商。
+
+协议依据：[OpenAI Responses 流式事件](https://developers.openai.com/api/reference/resources/responses/streaming-events)与[流式指南](https://developers.openai.com/api/docs/guides/streaming-responses)，核验日期 2026-10-30。
+
 ## 提交与评阅
 
 提交函数差异、学生测试结果，以及一条“参数尚未闭合”和一条“监听器未完成”的轨迹。解释临时预览为什么不能直接进持久历史，事件消费者变慢会阻塞什么，取消信号为什么还必须传给产生流的 HTTP 请求。

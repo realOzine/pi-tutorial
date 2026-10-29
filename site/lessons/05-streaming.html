@@ -63,6 +63,10 @@
 <pre><code>npm run lab -- 05 test     # 学生实现
 npm run lab -- 05 verify   # 独立参考实现
 npm run lab -- 05 demo     # 固定增量演示，没有付费调用</code></pre>
+<h3>把同一个消费者接到真实 Responses 流</h3>
+<p><a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/05-streaming/openai.ts:1:1"><code>createStreamingOpenAIModel</code></a> 复用第 03 课请求编码，发送 <code>stream: true</code>。它不是把完整答案切片：每个网络事件到达后就映射成增量，交给你刚理解的消费器。保持 <code>store: false</code>、reasoning effort <code>none</code>、输出上限和超时，默认测试只访问本地 HTTP fixture。</p>
+<p>有两个 ID 必须区分：Responses 参数增量通过 <code>item_id</code> 找到正在生成的输出项；后续工具结果通过 <code>call_id</code> 关联调用。适配器在 <code>response.output_item.added</code> 建立对应关系，逐段拼参数，到 <code>response.completed</code> 才产生本课 finish。<code>function_call_arguments.done</code> 不等于整轮完成。协议依据为 <a href="https://developers.openai.com/api/reference/resources/responses/streaming-events">OpenAI 官方事件参考</a>与<a href="https://developers.openai.com/api/docs/guides/streaming-responses">流式指南</a>，核验于 2026-10-30。</p>
+<p><a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/05-streaming/openai.test.ts:1:1">协议测试</a>检查 preview 在最终响应前出现、调用 ID 映射、取消、超时、截断以及最终内容与增量是否一致。它证明本地固定响应经过真实 HTTP 解码链路，不代表供应商实调用已经完成。适配器只支持文字与函数工具；扩大到 reasoning、图片或托管工具时，需要扩充共享消息模型和测试，不能静默丢弃不认识的输出。</p>
 <details><summary>提示 1 · 为什么参数不能每段 JSON.parse？</summary><p>中间片段不保证闭合。即使某个片段恰好闭合，后面仍可能补字段。把原始文本视为 preview 数据，finish 才改变可用状态。</p></details>
 <details><summary>提示 2 · 正式历史应该由谁追加？</summary><p>消费器只返回一个完整响应；主循环负责历史。这样写不需要让每个 delta 知道整个会话，也避免多处同时追加。</p></details>
 <details><summary>提示 3 · 不要用 Promise.race 假装取消上游</summary><p>让等待方提前返回，不代表网络连接或生产者停止。必须把 signal 传到实际 I/O，并等待清理。测试可通过 generator 的 finally 检查消费者退出时是否关闭了迭代。</p></details></section>
