@@ -46,6 +46,7 @@
       <div class="note">
         <p class="note-label">从会解释一条轨迹开始</p>
         <p>不熟悉 TypeScript 时先读第 00 课；能读 async/await 时，从第 01 课开始。默认演示和检查使用固定场景，不需要密钥。页面单步动画是教学模拟，Node 实验才执行代码；真实模型需要在终端显式启用。</p>
+        <a class="next-link" href="lessons/01-agent-loop.html#atlas">先看完整架构与最小循环的位置 →</a>
         <a class="next-link" href="lessons/00-typescript.html">先补齐 TypeScript →</a>
         <a class="next-link" href="lessons/01-agent-loop.html">直接进入最小 Agent 循环 →</a>
       </div>
@@ -70,9 +71,20 @@
       </section>
       <section id="method" aria-labelledby="method-heading">
         <h2 id="method-heading"><span class="section-number">02</span>怎样完成一课</h2>
-        <p>先读任务，预测下一步，再操作模拟器。能解释一条轨迹以后，去本地补齐关键代码；测试告诉你具体哪条约定被破坏，源码阅读则帮助你理解真实项目怎样处理更多约束。</p>
+        <p>先读具体任务，再从每课的“先看全局，再进入本课”开始。用完整架构建立方向，找到当前深入的部分，然后沿局部流程观察数据怎样变化。理解这条路径后，再读源码和补齐关键代码。</p>
+        <div class="table-scroll"><table>
+          <thead><tr><th>读图顺序</th><th>这一层要看清什么</th></tr></thead>
+          <tbody>
+            <tr><td>1. 完整架构</td><td>循环、模型、工具、会话等组件各自负责什么，哪些交互跨越进程或网络。</td></tr>
+            <tr><td>2. 本课位置</td><td>当前高亮的是哪项职责，输入来自哪里，输出交给谁。</td></tr>
+            <tr><td>3. 局部流程</td><td>沿箭头确认调用顺序，以及消息、结果或取消信号的流向。</td></tr>
+            <tr><td>4. 数据变化</td><td>先预测再单步，对照状态前后值；区分请求视图、持久日志和实际文件。</td></tr>
+            <tr><td>5. 架构取舍</td><td>比较所选方案与另一方案，解释收益、代价，以及何时值得换方案。</td></tr>
+          </tbody>
+        </table></div>
+        <p>例如上下文课会同时展示“请求视图变短”和“原始日志保持不变”。先看懂这两个状态，再读裁剪代码，就能判断它省下了什么、是否丢掉下一步需要的约束。全图保留后续模块便于定位，不表示它们已经在本课实现。</p>
         <ol>
-          <li><strong>观察：</strong>把一次输入到最终输出的消息和控制流串起来。</li>
+          <li><strong>观察：</strong>按上面的顺序读图，再预测一次输入到最终输出的消息和控制流。</li>
           <li><strong>实现：</strong>只写当前机制，脚手架提供与本课无关的输入输出。</li>
           <li><strong>验证：</strong>先用固定场景检查协议，再检查真实文件或 HTTP；真实模型用量和结果另作记录。</li>
           <li><strong>解释：</strong>提交代码、测试结果和一段设计说明，接受评审后再进入下一课。</li>
