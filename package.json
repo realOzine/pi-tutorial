@@ -1,0 +1,19 @@
+{
+  "name": "pi-tutorial",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.19.0" },
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "check": "tsc --noEmit && node scripts/check-site.mjs && node --test tests/*.test.mjs && npm run lab:01:verify",
+    "lab:01": "node labs/01-agent-loop/cli.ts",
+    "lab:01:test": "node --test labs/01-agent-loop/loop.test.ts",
+    "lab:01:demo": "node labs/01-agent-loop/cli.ts --reference",
+    "lab:01:verify": "PI_TUTORIAL_REFERENCE=1 node --test labs/01-agent-loop/loop.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  }
+}
