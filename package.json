@@ -6,6 +6,7 @@
   "engines": { "node": ">=22.19.0" },
   "scripts": {
     "dev": "node scripts/serve.mjs",
+    "lab": "node scripts/lab.mjs",
     "check": "tsc --noEmit && node scripts/check-site.mjs && node --test tests/*.test.mjs && npm run lab:01:verify",
     "lab:01": "node labs/01-agent-loop/cli.ts",
     "lab:01:test": "node --test labs/01-agent-loop/loop.test.ts",
