@@ -1,15 +1,16 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>09 · 上下文选择与压缩 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>09 · 上下文选择与压缩 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><link rel="stylesheet" href="../assets/architecture.css"><script type="module" src="../assets/lesson-tools.mjs"></script><script type="module" src="../assets/architecture.mjs"></script></head>
 <body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
 <aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p>
-<nav aria-label="本课导航"><a href="#problem">删掉了哪条约束</a><a href="#trace">比较三种策略</a><a href="#mechanism">预算与完整交互</a><a href="#source">pi 的切分与摘要</a><a href="#lab">实验与提示</a><a href="#tradeoffs">成本与信息损失</a><a href="#review">自测与评阅</a></nav>
+<nav aria-label="本课导航"><a href="#atlas">本课在整体中的位置</a><a href="#problem">删掉了哪条约束</a><a href="#trace">比较三种策略</a><a href="#mechanism">预算与完整交互</a><a href="#source">pi 的切分与摘要</a><a href="#lab">实验与提示</a><a href="#tradeoffs">成本与信息损失</a><a href="#review">自测与评阅</a></nav>
 </aside>
 <main id="main">
 <header><p class="eyebrow">09 / 上下文管理</p>
 <h1>省下的上下文，可能正是下一步的条件</h1>
 <p class="lead">用户第一句说“必须保留端口 8080”。随后工具返回几千行日志，最后用户问“现在应该使用哪个端口？”只保留最新消息很省空间，却把答案的依据删掉了。本课用同一份历史比较全量、裁剪与摘要，观察省了什么，又丢了什么。</p>
 <div class="meta"><span>先修：第 08 课</span><span>实验：确定性上下文变换</span><span>字符预算，不冒充 token 计量</span></div></header>
+<section id="atlas" data-architecture="09"><h2>先看全局，再进入本课</h2><p>用图定位本课的职责，再沿箭头观察调用与数据变化。以下是教学示意，不能替代真实运行证据。</p></section>
 <section id="problem">
 <h2>模型窗口是输入限制，也是选择问题</h2>
 <p>第 08 课的日志可以一直追加，模型的一次请求却不能无限增长。请求不仅包括历史，还包括系统提示、工具声明、检索内容，通常还要给输出留下空间。因此“磁盘存得下”不能推出“下一次模型调用发得出去”。</p>

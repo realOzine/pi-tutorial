@@ -1,9 +1,10 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>11 · 评测与故障分析 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>11 · 评测与故障分析 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><link rel="stylesheet" href="../assets/architecture.css"><script type="module" src="../assets/lesson-tools.mjs"></script><script type="module" src="../assets/architecture.mjs"></script></head>
 <body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
-<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p><nav aria-label="本课导航"><a href="#problem">怎样证明改进</a><a href="#trace">固定任务与故障</a><a href="#mechanism">报告与判定器</a><a href="#source">pi 的测试证据</a><a href="#lab">实验与提示</a><a href="#tradeoffs">比较的边界</a><a href="#review">自测与评阅</a></nav></aside>
+<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p><nav aria-label="本课导航"><a href="#atlas">本课在整体中的位置</a><a href="#problem">怎样证明改进</a><a href="#trace">固定任务与故障</a><a href="#mechanism">报告与判定器</a><a href="#source">pi 的测试证据</a><a href="#lab">实验与提示</a><a href="#tradeoffs">比较的边界</a><a href="#review">自测与评阅</a></nav></aside>
 <main id="main"><header><p class="eyebrow">11 / 评测与故障分析</p><h1>有一次成功，能说明架构变好了吗？</h1><p class="lead">你把历史裁剪改成摘要，Agent 终于记住端口 8080。但这次成功也可能来自任务变简单、模型换了版本，或者判定规则太宽。本课建立可重复的比较：固定任务，保存每一次结果，分清程序运行完、任务做对和证据足够这三件事。</p><div class="meta"><span>先修：第 10 课</span><span>新增：固定评测集与逐案报告</span><span>本课默认：无模型调用</span></div></header>
+<section id="atlas" data-architecture="11"><h2>先看全局，再进入本课</h2><p>用图定位本课的职责，再沿箭头观察调用与数据变化。以下是教学示意，不能替代真实运行证据。</p></section>
 <section id="problem"><h2>先写清楚“更好”指什么</h2>
 <p>沿用第 09 课的具体问题：旧消息要求端口为 8080，中间出现大量日志，最后用户问端口。baseline 采用 trim，candidate 采用固定规则摘要。两者拿到完全相同的原始消息与预算，只改变历史处理策略。先预测：如果只检查请求是否完成，两者会不会都通过？会；完成了一个错误回答也是 completed。</p>
 <pre><code>相同任务集 + 相同运行条件
