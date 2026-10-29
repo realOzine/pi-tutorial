@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { extname, relative, resolve, sep } from "node:path";
+import { parseWalkthrough } from "../site/assets/walkthrough.mjs";
 
 const root = fileURLToPath(new URL("../site/", import.meta.url));
 const entries = await readdir(root, { recursive: true });
@@ -17,6 +18,9 @@ for (const page of pages) {
   assert.match(html, /<title>[^<]+<\/title>/i, `${page}: 缺少标题`);
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length, `${page}: 重复的 id`);
+  for (const match of html.matchAll(/<script\b[^>]*class="walkthrough-data"[^>]*>([\s\S]*?)<\/script>/g)) {
+    parseWalkthrough(match[1]);
+  }
   for (const match of html.matchAll(/\b(?:href|src)="([^"]+)"/g)) {
     const destination = match[1];
     if (destination.startsWith("zed:")) {
