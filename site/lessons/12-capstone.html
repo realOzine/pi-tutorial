@@ -1,9 +1,10 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>12 · 整合项目与架构答辩</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>12 · 整合项目与架构答辩</title><link rel="stylesheet" href="../assets/course.css"><link rel="stylesheet" href="../assets/architecture.css"><script type="module" src="../assets/lesson-tools.mjs"></script><script type="module" src="../assets/architecture.mjs"></script></head>
 <body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
-<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">12 / 完成与解释</p><nav aria-label="本课目录"><a href="#problem">停止之后发生什么</a><a href="#architecture">整条调用路径</a><a href="#trace">单步追踪恢复</a><a href="#lab">实现与运行</a><a href="#limits">失败与代价</a><a href="#comparison">三种架构对照</a><a href="#review">毕业验收</a></nav></aside>
+<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">12 / 完成与解释</p><nav aria-label="本课目录"><a href="#atlas">本课在整体中的位置</a><a href="#problem">停止之后发生什么</a><a href="#architecture">整条调用路径</a><a href="#trace">单步追踪恢复</a><a href="#lab">实现与运行</a><a href="#limits">失败与代价</a><a href="#comparison">三种架构对照</a><a href="#review">毕业验收</a></nav></aside>
 <main id="main"><header><p class="eyebrow">第 12 课 · 一个可运行、可恢复、可解释的 Agent</p><h1>把循环接起来，<br>也把停止条件接起来。</h1><p class="lead">这次 Agent 要读取两个文件，修复一处语法错误，运行检查，再解释实际结果。更重要的验收是：编辑完成后退出进程，重新启动，能否从检查继续？如果只留下了编辑请求，却不知道是否写入成功，它应该做什么？</p><div class="meta"><span>先修：00–11</span><span>实验：真实文件、进程与日志</span><span>模型：离线默认，真实 API 显式开启</span></div></header>
+<section id="atlas" data-architecture="12"><h2>先看全局，再进入本课</h2><p>用图定位本课的职责，再沿箭头观察调用与数据变化。以下是教学示意，不能替代真实运行证据。</p></section>
 
 <section id="problem"><h2>一个正常循环，为什么仍然不够</h2>
 <p>第 01 课把工具结果加回消息列表，便能开始下一轮。但消息只在内存里：终端关闭后，你不知道上一次执行到哪里。现在假设 edit_file 已经把文件改好，进程却在写入工具结果之前退出。重新执行编辑可能报“旧文本不存在”；对付款或发布操作，这种重复的后果会更严重。</p>
