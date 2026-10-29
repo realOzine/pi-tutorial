@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="以 pi 源码为线索，从最小循环开始，亲手实现并理解一个 Agent。">
+  <title>从循环开始 · Pi 学习手册</title>
+  <link rel="stylesheet" href="assets/course.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <div class="layout">
+    <aside class="sidebar" aria-label="课程导航">
+      <a class="brand" href="index.html">Pi 学习手册</a>
+      <p class="brand-note">从循环开始，理解每一个取舍</p>
+      <p class="sidebar-label">阅读路径</p>
+      <nav>
+        <a href="#main" aria-current="page">课程说明</a>
+        <a href="#map">完整课程地图</a>
+        <a href="#method">怎样完成一课</a>
+        <a href="lessons/01-agent-loop.html">01 · 最小 Agent 循环</a>
+      </nav>
+      <p class="sidebar-foot">中文讲解 · TypeScript 实验<br>源码基线：1be312b<br>当前开放：第 1 课</p>
+    </aside>
+    <main id="main">
+      <header>
+        <p class="eyebrow">课程总览 / COURSE NOTES</p>
+        <h1>从一个循环，<br>理解 Agent 如何工作。</h1>
+        <p class="lead">你告诉模型“读一下 README”，究竟是谁打开文件、把结果交回模型，又是谁决定结束？这门课从这条最短的执行路径开始，一步步搭建自己的 Agent，并回到 pi 的源码核对真实实现。</p>
+        <p>每次增加一个机制，都先回答它解决了什么问题。你将亲手写关键代码，观察运行轨迹，再讨论这个选择付出的代价，以及何时应该换一种做法。</p>
+        <div class="meta"><span>主要语言：TypeScript</span><span>学习载体：本地 HTML + 代码实验</span><span>当前状态：第一课样板</span></div>
+      </header>
+      <div class="note">
+        <p class="note-label">先从第一课开始</p>
+        <p>第一课用固定规则的模拟模型，不需要 API Key，也不会调用付费模型。页面中的轨迹是教学数据；实验在本地终端运行。第 0 课与第 2—12 课列出后续路线，内容尚未交付。</p>
+        <a class="next-link" href="lessons/01-agent-loop.html">进入第 1 课：最小 Agent 循环 →</a>
+      </div>
+      <section id="map" aria-labelledby="map-heading">
+        <h2 id="map-heading"><span class="section-number">01</span>完整课程地图</h2>
+        <p>这是一条逐步扩展同一个程序的路线。前两课建立循环与工具协议，随后接入真实模型和 coding 工具；在程序能够完成任务后，再处理交互、恢复、上下文和扩展。</p>
+        <ol class="course-list" start="0">
+          <li><span class="course-number">00</span><div><p class="course-name">读懂本课需要的 TypeScript</p><p class="course-desc">从 Go 的经验出发，认识对象、联合类型、Promise 与 async/await。只补足读源码和写实验的前提。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">01</span><div><p class="course-name"><a href="lessons/01-agent-loop.html">最小 Agent 循环</a></p><p class="course-desc">模型请求 → 工具执行 → 结果回传。写出循环，区分正常结束、工具错误与预算耗尽。</p></div><span class="badge ready">可以学习</span></li>
+          <li><span class="course-number">02</span><div><p class="course-name">工具协议与输入边界</p><p class="course-desc">参数由谁校验？调用和结果如何关联？处理未知工具、错误输入和错误反馈。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">03</span><div><p class="course-name">接入真实模型</p><p class="course-desc">把固定规则替换成模型适配器，观察协议差异、失败方式、成本与非确定性。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">04</span><div><p class="course-name">构建 coding 工具</p><p class="course-desc">在受限工作目录中读、改、检查文件。理解工具能力与执行权限的边界。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">05</span><div><p class="course-name">流式输出与事件</p><p class="course-desc">让界面及时看到进展，区分消息内容、运行事件与最终状态。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">06</span><div><p class="course-name">中断与用户介入</p><p class="course-desc">用户改变主意时如何取消？新的指令在何时进入循环？沿调用链追踪取消信号。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">07</span><div><p class="course-name">多工具调度</p><p class="course-desc">比较串行与并行执行，处理依赖、部分失败和执行顺序。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">08</span><div><p class="course-name">会话保存与恢复</p><p class="course-desc">区分历史与运行状态，检查重启、分支和未完成工具调用留下的问题。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">09</span><div><p class="course-name">上下文选择与压缩</p><p class="course-desc">上下文不够时保留什么？用相同任务比较截断、摘要和按需读取。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">10</span><div><p class="course-name">指令与扩展机制</p><p class="course-desc">让能力按需加入，讨论核心接口的稳定性、扩展顺序与维护成本。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">11</span><div><p class="course-name">评测与故障分析</p><p class="course-desc">用固定任务集验证改动，分开衡量协议正确性、任务成功率、耗时和成本。</p></div><span class="badge">计划中</span></li>
+          <li><span class="course-number">12</span><div><p class="course-name">整合项目与架构答辩</p><p class="course-desc">完成自己的 Agent，解释保留和放弃的能力，并与 pi 及其他开源实现做有证据的比较。</p></div><span class="badge">计划中</span></li>
+        </ol>
+      </section>
+      <section id="method" aria-labelledby="method-heading">
+        <h2 id="method-heading"><span class="section-number">02</span>怎样完成一课</h2>
+        <p>先读任务，预测下一步，再操作模拟器。能解释一条轨迹以后，去本地补齐关键代码；测试告诉你具体哪条约定被破坏，源码阅读则帮助你理解真实项目怎样处理更多约束。</p>
+        <ol>
+          <li><strong>观察：</strong>把一次输入到最终输出的消息和控制流串起来。</li>
+          <li><strong>实现：</strong>只写当前机制，脚手架提供与本课无关的输入输出。</li>
+          <li><strong>验证：</strong>先用模拟模型检查程序行为，再在后续课程接入真实模型。</li>
+          <li><strong>解释：</strong>提交代码、测试结果和一段设计说明，接受评审后再进入下一课。</li>
+        </ol>
+        <p>参考实现放在独立的 <code>solutions/</code> 中。练习不需要先打开答案；卡住时可以逐层展开提示。完成标准是能解释行为，并应对变化的输入。</p>
+        <p class="quiet">每课会区分源码事实、教学简化、设计推断与实测结果。课程以固定提交为源码基线；本地 pi 更新以后，需要重新核对链接行号和实现行为。</p>
+      </section>
+      <footer>Pi 学习手册 · 本地课程样板。当前仅第 1 课可学习；后续内容将随学习反馈逐课完成。</footer>
+    </main>
+  </div>
+</body>
+</html>
