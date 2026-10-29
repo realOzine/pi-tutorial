@@ -1,9 +1,10 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>00 · 必要的 TypeScript · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>00 · 必要的 TypeScript · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script><link rel="stylesheet" href="../assets/architecture.css"><script type="module" src="../assets/architecture.mjs"></script></head>
 <body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
-<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">00 · 读懂类型与异步</p><nav aria-label="本课目录"><a href="#problem">为什么先学这些语法</a><a href="#types">消息与类型收窄</a><a href="#async">等待、异常与取消</a><a href="#trace">单步观察</a><a href="#source">对应 pi 源码</a><a href="#lab">动手练习</a><a href="#tradeoffs">取舍与自测</a></nav></aside>
+<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">00 · 读懂类型与异步</p><nav aria-label="本课目录"><a href="#atlas">本课在整体中的位置</a><a href="#problem">为什么先学这些语法</a><a href="#types">消息与类型收窄</a><a href="#async">等待、异常与取消</a><a href="#trace">单步观察</a><a href="#source">对应 pi 源码</a><a href="#lab">动手练习</a><a href="#tradeoffs">取舍与自测</a></nav></aside>
 <main id="main"><header><p class="eyebrow">准备课 / 00</p><h1>先分清消息，再等待结果</h1><p class="lead">一个 Agent 会处理用户问题、模型的工具请求和工具结果。这些数据长得相似，允许做的事却不同。本课只补齐后面读源码和写实验必需的 TypeScript。</p><div class="meta"><span>前提：函数、数组、基本控制流</span><span>产物：消息分支与异步操作包装</span><span>无需模型账号</span></div></header>
+<section id="atlas" data-architecture="00"><h2>先看全局，再进入本课</h2><p>用图定位本课的职责，再沿箭头观察调用与数据变化。以下是教学示意，不能替代真实运行证据。</p></section>
 <section id="problem"><h2>同样是消息，为什么不能随便取字段</h2><p>假设页面收到一个对象，代码直接读取 <code>message.callId</code>。工具结果确实有调用 ID；用户消息只有提问。程序如果把后者当作工具结果，会拿到 <code>undefined</code>，错误却可能到下一次 HTTP 请求才暴露。</p><p>我们先把“是哪一种消息”存成明确的标签，再规定每一种允许哪些字段。编译器便能在你写错分支时提醒。运行时从 JSON 收到的数据仍可能不符合声明；第 2 课会在那个边界校验。</p><pre><code>type Message =
   | { role: "user"; content: string }
   | { role: "tool"; callId: string; content: string; isError: boolean };

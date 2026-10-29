@@ -1,9 +1,10 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>02 · 工具协议与输入边界</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>02 · 工具协议与输入边界</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script><link rel="stylesheet" href="../assets/architecture.css"><script type="module" src="../assets/architecture.mjs"></script></head>
 <body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
-<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">02 / 工具协议</p><nav aria-label="本课目录"><a href="#problem">从坏参数开始</a><a href="#trace">单步观察</a><a href="#mechanism">协议与校验</a><a href="#source">pi 的执行路径</a><a href="#lab">补全工具执行器</a><a href="#tradeoffs">取舍与边界</a><a href="#review">自测与评阅</a></nav></aside>
+<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">02 / 工具协议</p><nav aria-label="本课目录"><a href="#atlas">本课在整体中的位置</a><a href="#problem">从坏参数开始</a><a href="#trace">单步观察</a><a href="#mechanism">协议与校验</a><a href="#source">pi 的执行路径</a><a href="#lab">补全工具执行器</a><a href="#tradeoffs">取舍与边界</a><a href="#review">自测与评阅</a></nav></aside>
 <main id="main"><header><p class="eyebrow">第 02 课 · 从模型意图到可执行操作</p><h1>模型说要调用工具，<br>程序还需要检查什么？</h1><p class="lead">上一课假定模型总能返回正确的工具名和路径。这次它请求 <code>read_file({ path: ["README.md"] })</code>。数组当然也是合法 JSON，却不是工具接受的路径。你的任务是在执行之前拒绝它，并把原因关联到这次调用，让模型有机会改正。</p><div class="meta"><span>先修：第 01 课</span><span>实验：内存文件，无 API 调用</span><span>源码基线：1be312b46</span></div></header>
+<section id="atlas" data-architecture="02"><h2>先看全局，再进入本课</h2><p>用图定位本课的职责，再沿箭头观察调用与数据变化。以下是教学示意，不能替代真实运行证据。</p></section>
 <section id="problem"><h2>一段文本怎样变成一次操作</h2><p>先写下你的预测：工具名字不存在时，应该抛出并终止整个 Agent，还是反馈给模型？参数合法但文件不存在时，错误又发生在哪一层？如果这两个问题混在一起，日志可能只剩一句“工具失败”，你就无法判断该改提示词、校验器还是文件路径。</p><pre><code>assistant: id=c1, name=read_file, arguments={"path":["README.md"]}
 执行器:    找到 read_file → 检查 path → 拒绝数组 → 没有读文件
 tool:      callId=c1, isError=true, content="Expected exactly { path: non-empty string }"
