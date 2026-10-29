@@ -1,4 +1,5 @@
 // One ordered inventory for course checks and lab commands.
+import { readdirSync } from 'node:fs';
 export const lessons = [
   ['00', 'typescript', '必要的 TypeScript'],
   ['01', 'agent-loop', '最小 Agent 循环'],
@@ -22,5 +23,7 @@ export function labCommand(id, action) {
   }
   const path = `labs/${lesson.directory}/`;
   if (action === 'demo') return [path + (id === '01' ? 'cli.ts' : 'demo.ts'), ...(id === '01' ? ['--reference'] : [])];
-  return ['--test', path + (id === '01' ? 'loop.test.ts' : 'exercise.test.ts')];
+  const tests = readdirSync(new URL(`../${path}`, import.meta.url)).filter(name => name.endsWith('.test.ts')).sort();
+  if (!tests.length) throw new Error(`课 ${id} 缺少实验检查`);
+  return ['--test', ...tests.map(name => path + name)];
 }

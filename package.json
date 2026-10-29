@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "lab": "node scripts/lab.mjs",
-    "check": "tsc --noEmit && node scripts/check-site.mjs && node --test tests/*.test.mjs && npm run lab:01:verify",
+    "check": "tsc --noEmit && node scripts/check-site.mjs && node --test tests/*.test.mjs && npm run lab -- all verify",
     "lab:01": "node labs/01-agent-loop/cli.ts",
     "lab:01:test": "node --test labs/01-agent-loop/loop.test.ts",
     "lab:01:demo": "node labs/01-agent-loop/cli.ts --reference",

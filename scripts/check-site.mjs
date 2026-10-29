@@ -4,12 +4,22 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { extname, relative, resolve, sep } from "node:path";
 import { parseWalkthrough } from "../site/assets/walkthrough.mjs";
+import { lessons } from "./course.mjs";
 
 const root = fileURLToPath(new URL("../site/", import.meta.url));
 const entries = await readdir(root, { recursive: true });
 const pages = entries.filter((entry) => entry.endsWith(".html"));
 assert(pages.includes("index.html"), "课程首页缺失");
-assert(pages.includes("lessons/01-agent-loop.html"), "第一课缺失");
+for (const lesson of lessons) {
+  assert(pages.includes(`lessons/${lesson.directory}.html`), `课 ${lesson.id} 缺少 HTML`);
+  const files = [
+    `labs/${lesson.directory}/README.md`,
+    `labs/${lesson.directory}/${lesson.id === "01" ? "loop.ts" : "exercise.ts"}`,
+    `labs/${lesson.directory}/${lesson.id === "01" ? "cli.ts" : "demo.ts"}`,
+    `solutions/${lesson.directory}.ts`,
+  ];
+  for (const file of files) assert((await stat(new URL(`../${file}`, import.meta.url))).isFile(), `${file} 缺失`);
+}
 let links = 0;
 let sourceLinks = 0;
 for (const page of pages) {
