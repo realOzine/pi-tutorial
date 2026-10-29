@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>05 · 流式输出与事件 — Pi 学习手册</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script type="module" src="../assets/lesson-tools.mjs"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="layout">
+<aside class="sidebar" aria-label="课程导航">
+  <a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p>
+  <nav><a href="#problem">问题与预测</a><a href="#trace">单步观察</a><a href="#mechanism">增量与提交</a><a href="#source">pi 源码路径</a><a href="#lab">代码实验</a><a href="#tradeoffs">设计取舍</a><a href="#review">自测与评阅</a></nav>
+</aside>
+<main id="main">
+<header><p class="eyebrow">05 / STREAMING</p><h1>文字已经出现，<br>为什么还不能执行工具？</h1>
+<p class="lead">上一课能读写文件，却要等模型返回完整响应才显示进展。这一课让用户及时看到正在生成的内容，同时守住一条边界：能够展示的半成品，不一定能写进历史，更不能直接执行。</p>
+<div class="meta"><span>先修：第 04 课</span><span>实现：增量消费者</span><span>验证：离线 HTTP SSE</span></div></header>
+
+<section id="problem"><h2>从半个参数开始</h2>
+<p>模型准备调用 <code>read</code>。网络先到达 <code>{"path":</code>，过一会儿才到达 <code>"README.md"}</code>。界面可以显示“正在准备 read”，但此时 JSON 还不完整。如果你每次收到片段就执行工具，可能执行两次，也可能用默认路径执行一次错误操作。</p>
+<p>先不写代码，预测这三个时刻的状态：收到第一段参数、收到第二段参数、收到结束事件。分别写出“界面暂存什么、正式历史里有什么、工具执行次数是多少”。本课消费者没有执行工具的职责，因此这三个时刻执行次数都应为零；只有完整响应交回主循环，执行器才可能获得请求。</p>
+<pre><code>网络字节 → 帧解析 → provider 事件映射 → 课程增量
+                                      ↓
+                              临时 preview → 界面
+                                      ↓ finish
+                              完整 response → 主循环 → 工具</code></pre>
+<p>这里的“事件”是一条描述变化的数据，例如新增文字或响应结束。它不自动意味着可靠消息队列，也不保证订阅者会完成操作。调用方是否等待监听器，决定事件在程序中只是通知，还是一道需要通过的执行屏障。</p></section>
+
+<section id="trace"><h2>观察生成中和已完成的区别</h2>
+<p>下面是教学模拟。第一个场景正常结束；第二个在输出限制处截断。注意：第二个场景的参数已经是合法 JSON，也仍然不能执行，因为模型没有保证它完整表达了原定请求。</p>
+<div class="simulator" data-walkthrough><script type="application/json" class="walkthrough-data">
+{"scenarios":[{"id":"complete","label":"参数完整后提交","steps":[{"title":"工具开始","detail":"建立临时记录，尚无可执行调用。","state":{"preview":{"id":"r1","name":"read","argumentsText":""},"history":[],"executed":0}},{"title":"第一段参数","detail":"JSON 尚未闭合。界面可展示原始文本，不能解析执行。","state":{"preview":{"argumentsText":"{\"path\":"},"history":[],"executed":0}},{"title":"第二段参数","detail":"语法完整仍不等于响应结束。等待 finish。","state":{"preview":{"argumentsText":"{\"path\":\"README.md\"}"},"history":[],"executed":0}},{"title":"finish: tool_calls","detail":"消费器解析参数并发出一次 commit；执行权仍在主循环。","state":{"response":{"toolCalls":[{"id":"r1","name":"read","arguments":{"path":"README.md"}}]},"commits":1,"executed":0}}]},{"id":"truncated","label":"合法 JSON 也可能被截断","steps":[{"title":"先收到一段合法对象","detail":"可能还有未输出的字段或后续调用。","state":{"preview":{"argumentsText":"{}"},"commits":0}},{"title":"finish: length","detail":"服务端表示达到了输出上限。拒绝带工具的响应，不把可解析误当成完整。","state":{"error":"Truncated response","commits":0,"executed":0}},{"title":"交给上层恢复策略","detail":"本课抛出；真实循环可记录明确错误后重试，但不能执行这批工具。","state":{"retryPolicy":"由主循环决定","historyUnchanged":true}}]}]}
+</script></div>
+<p>再做一个预测：把监听器写成 <code>await savePreview()</code>，每次保存都需要等待时，下一段会不会立刻被消费？实验会用一个可手动放行的 Promise 验证顺序，避免拿不稳定的毫秒阈值代替控制流证据。</p></section>
+
+<section id="mechanism"><h2>只保留一份最终消息</h2>
+<p><code>AsyncIterable</code> 是可以异步逐项读取的数据源。<code>for await</code> 每次等待下一项；它不会自己创建并行任务。网络层可能已经缓冲了更多字节，但消费者什么时候处理下一项，仍由循环里的等待决定。</p>
+<p>参考实现维护一段累计文字和一个按调用 ID 索引的 Map。参数增量存为字符串，直到 <code>finish</code> 才解析。这让两个交错输出的工具调用各自积累参数，避免仅凭“最近一个工具”把数据接错。重复 ID 和没有起始记录的增量都被拒绝，因为它们破坏了关联协议。</p>
+<p>每次增量发出的 <code>preview</code> 是当前临时状态快照。它不追加正式历史；结束时只返回一个完整 <code>AssistantMessage</code>。如果把每段文字都作为独立 assistant 消息追加，下一次请求就会看到重复或破碎的回答，工具调用与结果的关系也会变得含糊。</p>
+<div class="table-scroll"><table><thead><tr><th>数据</th><th>何时可用</th><th>允许做什么</th></tr></thead><tbody>
+<tr><td>网络 chunk</td><td>任意字节边界</td><td>解码与拼接；一个中文字符也可能跨 chunk。</td></tr>
+<tr><td>SSE frame</td><td>空行结束一条帧</td><td>按协议提取 data；不能假设一个 chunk 等于一条 JSON。</td></tr>
+<tr><td>preview</td><td>每次有效增量后</td><td>更新界面；本课不用于执行或恢复。</td></tr>
+<tr><td>commit</td><td>合法 finish 后</td><td>向主循环交付完整响应；工具参数仍需第 02 课的业务校验。</td></tr>
+</tbody></table></div>
+<p>本课等待监听器完成，因此监听器抛错会让消费失败。若监听器已经把内容写到外部存储，之后抛错，程序也不能撤销那次写入。事件完成与外部事务完成不是同一件事。第 08 课会专门讨论可恢复记录；这里不为 UI 通知添加持久队列。</p>
+<h3>取消必须传到产生流的地方</h3>
+<p>消费器会在处理增量前检查 <code>signal</code>，但如果上游永远不产生下一项，单靠这次检查不能打断等待。真实 HTTP 适配器必须把同一个信号交给 <code>fetch</code> 或其他可取消 I/O。消费者检测取消与生产者响应取消必须同时成立。</p></section>
+
+<section id="source"><h2>pi 怎样维护临时状态</h2>
+<p>阅读基线是 <code>1be312b46</code>。从 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent-loop.ts:390:1"><code>streamAssistantResponse</code></a> 开始：它先变换上下文，再调用流式模型函数，逐个处理 <code>start</code>、增量以及 <code>done/error</code>。</p>
+<p>低层循环在 start 时把临时消息放进当前上下文，后续更新替换最后一项，最后再用完整消息替换；它不是每个 delta 追加一条历史。对外的 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:575:1"><code>processEvents</code></a> 则把增量放在 <code>streamingMessage</code>，到 <code>message_end</code> 才追加到公开消息列表。读源码时先确认自己看的是哪一份状态，才能解释看似不同的操作。</p>
+<p>继续读 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:274:1"><code>subscribe</code></a> 与 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent.ts:614:1">监听器循环</a>：当前版本按订阅顺序等待监听器。<code>agent_end</code> 是最后一条事件，但直到监听器完成、运行状态清理后才真正 idle。不能把历史版本里“同步通知”的印象套到这份源码。</p>
+<p>低层 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/agent-loop.ts:43:1"><code>agentLoop</code></a> 返回事件流，它使用的 sink 只是把事件 push 入流；消费事件流的外部读取者是否处理完成，与 <code>Agent.subscribe</code> 的等待约定不同。这是接口语义差异，不是两种实现互相矛盾。</p>
+<div class="note"><p class="note-label">事实与教学简化</p><p>以上行为来自静态源码阅读。本课只实现文字和工具参数增量，不包含 pi 的 reasoning、图片、provider usage 细节。对截断工具响应，pi 会生成工具错误结果；本课消费者先抛出错误，把恢复策略留给上层。两者都不执行可能残缺的工具参数。</p></div></section>
+
+<section id="lab"><h2>补全消费者，再验证网络边界</h2>
+<p>打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/05-streaming/exercise.ts:1:1">学生入口</a>。它已经声明增量和事件类型；你实现累计状态、最终响应和错误边界。先运行 <code>npm run lab -- 05 test</code>，初始 TODO 失败是预期。</p>
+<ol><li>先只处理两个文字 delta 和 finish，保证 preview 两次、commit 一次。</li><li>加入工具 Map，直到 finish 才解析完整 JSON；按出现顺序保留调用。</li><li>加入截断、提前 EOF、重复 ID 与未知 ID 失败路径。</li><li>等待监听器，传递取消，再运行完整检查。</li></ol>
+<p><a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/05-streaming/transport.ts:1:1">SSE 解码脚手架</a>负责字节与帧，不是你的核心练习。它使用课程定义的事件结构，不能直接当作某家 provider 的 SDK。<a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/05-streaming/exercise.test.ts:1:1">测试</a>会启动真实的本地 HTTP 响应，在消费者看到 preview 后才允许服务端发送 finish，从而证明不是先读完整响应再假装逐字播放。</p>
+<pre><code>npm run lab -- 05 test     # 学生实现
+npm run lab -- 05 verify   # 独立参考实现
+npm run lab -- 05 demo     # 固定增量演示，没有付费调用</code></pre>
+<details><summary>提示 1 · 为什么参数不能每段 JSON.parse？</summary><p>中间片段不保证闭合。即使某个片段恰好闭合，后面仍可能补字段。把原始文本视为 preview 数据，finish 才改变可用状态。</p></details>
+<details><summary>提示 2 · 正式历史应该由谁追加？</summary><p>消费器只返回一个完整响应；主循环负责历史。这样写不需要让每个 delta 知道整个会话，也避免多处同时追加。</p></details>
+<details><summary>提示 3 · 不要用 Promise.race 假装取消上游</summary><p>让等待方提前返回，不代表网络连接或生产者停止。必须把 signal 传到实际 I/O，并等待清理。测试可通过 generator 的 finally 检查消费者退出时是否关闭了迭代。</p></details></section>
+
+<section id="tradeoffs"><h2>哪些复杂度是流式带来的</h2>
+<div class="table-scroll"><table><thead><tr><th>选择</th><th>收益</th><th>代价与改变条件</th></tr></thead><tbody>
+<tr><td>临时状态与正式消息分开</td><td>界面立即更新，历史只记录完整消息。</td><td>需要明确状态转换；若要恢复半途输出，还需额外持久化语义。</td></tr>
+<tr><td>等待监听器</td><td>执行顺序可推理，返回时知道监听器已处理。</td><td>慢 UI 或日志会拖慢流消费；如果解耦，必须另定缓冲、丢弃与错误策略。</td></tr>
+<tr><td>结束时解析参数</td><td>避免执行半成品，不需要复杂的部分 JSON 推断。</td><td>无法提前执行看似完整的调用；安全边界比少量延迟收益更明确。</td></tr>
+<tr><td>教学 SSE 协议</td><td>用小型本地服务器复现真实网络分片问题。</td><td>仍需 provider 映射层；本地通过不等于真实供应商协议通过。</td></tr>
+</tbody></table></div>
+<p>流式主要改善可见进展，不会自动提高模型答案质量，也不保证总耗时减少。课程中人为等待的毫秒数只用于观察，不是性能基准；真正比较延迟时，应分别测首个可见输出和任务完成时间。</p></section>
+
+<section id="review"><h2>自测与评阅</h2>
+<details><summary>JSON 已经合法，但 finish 是 length，可以执行 read 吗？</summary><p>本课拒绝所有带工具的截断响应。语法合法只证明可以解析，不能证明模型已完整表达请求。</p></details>
+<details><summary>收到 agent_end 就能关闭仍在写文件的监听器吗？</summary><p>不能据此判断。当前 pi 的 Agent 会等待监听器；idle 在其完成后。低层事件流的消费边界又不同，必须核对使用的接口。</p></details>
+<details><summary>消费器检查了 signal，为什么 HTTP 仍可能挂住？</summary><p>它可能正等待一个永远不来的增量。取消还必须由上游 I/O 实现，不能只检查外层布尔状态。</p></details>
+<p>提交学生代码、测试输出，以及“两个文字 delta、一条工具、一次 finish”的事件序列。评阅会增加一个交错的第二工具调用，检查你是否按 ID 拼接参数；再让监听器失败，要求你说明哪些状态已经产生、哪些不能回滚。</p>
+<p>完成标准：不把 partial 交给执行器；只交付一次最终响应；能用实际测试说明监听器等待和 HTTP 增量边界。下一课把这种执行时序用于用户中途改变任务的场景。</p>
+<a href="../index.html#map">返回课程地图</a></section>
+<footer>源码基线：1be312b46 · 页面为教学模拟；Node 演示使用固定事件；本地 HTTP 测试不调用真实模型。</footer>
+</main></div></body></html>
