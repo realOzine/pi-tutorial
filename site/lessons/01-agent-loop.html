@@ -7,6 +7,8 @@
   <title>01 · 最小 Agent 循环 — Pi 学习手册</title>
   <link rel="stylesheet" href="../assets/course.css">
   <script type="module" src="../assets/lesson-01.mjs"></script>
+  <link rel="stylesheet" href="../assets/architecture.css">
+  <script type="module" src="../assets/architecture.mjs"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳到正文</a>
@@ -16,6 +18,7 @@
       <p class="brand-note">从循环开始，理解每一个取舍</p>
       <p class="sidebar-label">第一课 / 最小 Agent 循环</p>
       <nav>
+        <a href="#atlas">本课在整体中的位置</a>
         <a href="../index.html">← 完整课程地图</a>
         <a href="#task">1. 从一个任务开始</a>
         <a href="#trace">2. 单步观察循环</a>
@@ -35,6 +38,10 @@
         <p class="lead">模型可以提出“读取 README.md”，但这句话本身不会打开文件。需要一段程序执行工具、记录结果，再把新的消息历史发给模型。这段程序，就是我们这一课要实现的循环。</p>
         <div class="meta"><span>产出：可测试的 runAgentLoop</span><span>前提：函数、数组、条件与循环</span><span>模型与文件：均为模拟</span></div>
       </header>
+      <section id="atlas" data-architecture="01">
+        <h2>先看全局，再进入本课</h2>
+        <p>用图定位本课的职责，再沿箭头观察调用与数据变化。以下是教学示意，不能替代真实运行证据。</p>
+      </section>
 
       <section id="task" aria-labelledby="task-heading">
         <h2 id="task-heading"><span class="section-number">01</span>从一个任务开始</h2>
