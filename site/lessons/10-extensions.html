@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>10 · 指令与扩展机制 · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
+<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">从循环开始，理解每一个取舍</p>
+<nav aria-label="本课导航"><a href="#problem">新能力放在哪里</a><a href="#trace">顺序与开关</a><a href="#mechanism">分清五种机制</a><a href="#source">pi 与 DeepSeek</a><a href="#lab">实验与提示</a><a href="#tradeoffs">生命周期与边界</a><a href="#review">自测与评阅</a></nav>
+</aside>
+<main id="main">
+<header><p class="eyebrow">10 / 指令与扩展</p>
+<h1>加一个项目能力，为什么要改循环？</h1>
+<p class="lead">你希望 Agent 在最终回答里说明做过哪些检查，再加一个查询项目约束的工具。如果每次都往主循环插入项目专属分支，循环很快就不再解释“模型与工具怎样协作”。本课把变化放到明确的接口，同时处理扩展之间的顺序、冲突和退出。</p>
+<div class="meta"><span>先修：第 09 课</span><span>新增：context hook 与自定义工具</span><span>对比：pi / DeepSeek Harness</span></div></header>
+<section id="problem">
+<h2>扩展的目标是隔离变化，不是消除复杂度</h2>
+<p>我们的需求有两个不同部分。“回答时列出检查”是给模型看的文本；“查询项目约束”是程序可以执行的能力。前者加到请求上下文，后者注册为工具。循环仍然只知道：拿到消息、调用模型、执行已注册工具、保存结果。</p>
+<pre><code>启动：基础工具 + 已启用扩展 → 确定工具表
+每次请求：历史 → hook A → hook B → 预算与协议检查 → 模型
+工具请求：原有校验与执行链 → 扩展工具实现
+退出：等在途工作结束 → 清理 B → 清理 A</code></pre><p>这个方案新增了一项责任：我们必须约定 hook 的调用时点、返回值、失败策略与销毁顺序。否则只是把主循环里的条件分支挪到看不见的地方。先预测：A 删除日志，B 根据日志补充说明，交换它们的顺序后结果会不会一样？一般不会。</p>
+</section>
+<section id="trace">
+<h2>单步看扩展怎样影响请求</h2>
+<p>以下为教学模拟。启用与禁用发生在启动装配时；不把界面切换场景当作实现了运行中热重载。</p>
+<div class="simulator" data-walkthrough><script type="application/json" class="walkthrough-data">{"scenarios":[{"id":"enabled","label":"启用：增加能力，循环不变","steps":[{"title":"装配扩展","detail":"扩展只通过约定接口贡献工具和上下文 hook。","state":{"baseTools":["read","edit","check"],"extension":"project-notes","addedTool":"project_info"}},{"title":"请求前处理","detail":"beforeModel 返回一个派生视图，提醒最终回答说明检查；原始日志不变。","state":{"requestMessages":["项目提醒","原历史"],"durableLog":["原历史"]}},{"title":"调用自定义工具","detail":"仍经过工具名查找、参数校验和执行，扩展没有获得绕过校验的特殊入口。","state":{"tool":"project_info","arguments":{},"result":"保留端口8080"}}]},{"id":"disabled","label":"禁用：回到基础行为","steps":[{"title":"启动时禁用","detail":"enabled=false 的扩展不注册工具，也不运行 hook。","state":{"baseTools":["read","edit","check"],"addedTools":[]}},{"title":"发起相同任务","detail":"原循环、基础工具和历史仍可用；模型看不到 project_info 的声明。","state":{"requestMessages":["原历史"],"coreLoop":"不变"}}]},{"id":"failure","label":"失败与清理","steps":[{"title":"依次运行 hook","detail":"B 接收 A 返回的上下文，执行顺序属于可观察行为。","state":{"order":["A","B"],"Binput":"Aoutput"}},{"title":"B 抛出异常","detail":"本课策略是停止请求并标明扩展名，不带着半处理的上下文继续调用模型。","state":{"error":"Extension B beforeModel failed","modelCalls":0}},{"title":"退出时逆序清理","detail":"先等当前 Agent 停止，再清理 B、A；一个清理失败也继续尝试其他清理，最后汇总错误。","state":{"cleanup":["B","A"],"newExtensionCalls":"拒绝","pastSideEffects":"不会自动撤销"}}]}]}</script></div>
+</section>
+<section id="mechanism">
+<h2>指令、skill、工具、hook 和协议分别做什么</h2>
+<div class="table-scroll"><table><thead><tr><th>机制</th><th>在示例中的作用</th><th>不会自动发生的事</th></tr>
+</thead><tbody><tr><td>系统提示与项目指令</td><td>告诉模型任务职责与“保留端口”的约定。</td><td>文字不会设置文件系统权限，也不保证模型必然遵守。</td></tr>
+<tr><td>Skill</td><td>一份按需读取的做事说明，例如如何评阅修改；先暴露名称与用途，再按需要读取正文。</td><td>有 SKILL.md 不等于注册了一个可调用的函数。</td></tr>
+<tr><td>工具</td><td>有名称、参数声明、校验与执行器的能力，模型可以请求它。</td><td>工具声明不会替代执行侧的路径边界和权限判断。</td></tr>
+<tr><td>Hook</td><td>运行时在明确时点调用的函数，例如请求前处理上下文。</td><td>监听事件不意味着会被持久保存，也不意味着默认并发。</td></tr>
+<tr><td>MCP</td><td>让客户端通过约定协议连接工具服务；服务可能是子进程，也可能经 HTTP。</td><td>协议不会自动把远端工具变成可信内容，也不会替你决定业务权限。</td></tr>
+</tbody></table></div>
+<h3>本课只实现一条可以解释的扩展链</h3>
+<p><code>createExtensions</code> 接收已编写并显式导入的扩展，忽略禁用项。启动时拒绝工具重名，避免同一个模型调用在不同加载顺序下悄悄指向另一个实现。每次请求前，hook 按声明顺序运行；后一个看到前一个的输出。</p>
+<p>参考实现为请求复制一次消息，让 hook 改动派生视图时不破坏持久历史。每个 hook 结束后核对工具关联，避免剪掉请求却留下孤立结果。这个检查仍不等于语义验证：hook 把“端口 8080”改成“端口 8081”，消息格式也可能完全合法，必须在评测中检查实际约束。</p>
+<p>失败策略也属于接口。本课遇到 hook 异常就停止下一次模型请求，并在错误里标出扩展名，原异常放在 cause 中。对提醒类扩展，可以选择报告后继续；对权限检查类扩展，继续就可能改变承诺。不能给所有事件套用一个未经解释的 catch。</p>
+<h3>跨进程前先画清边界</h3>
+<pre><code>本课：Node CLI ──函数调用──→ 本地 extension / tool
+
+MCP stdio：Node CLI 的 MCP client ──子进程输入输出管道──→ tool server
+MCP HTTP： Node CLI 的 MCP client ──HTTP──→ tool server
+
+模型 API：Node CLI 的 model adapter ──HTTP──→ provider</code></pre><p>本课不安装 MCP SDK，也不实现一个协议不完整却自称 MCP 的 JSON 管道。这里先完成可替换工具边界；若将来接入 MCP，再实现协议握手、工具发现、结果映射、取消和连接生命周期，继续复用原有工具执行策略。客户端模块位于 CLI 进程内，不应画成额外的网络服务。</p>
+</section>
+<section id="source">
+<h2>同一个扩展需求，pi 与 DeepSeek 怎样组织</h2>
+<p>pi 基线为 <code>1be312b46</code>。本课完整静态阅读了 <code>resource-loader.ts</code> 和 <code>extensions/runner.ts</code>；没有运行整个扩展系统。</p>
+<ol><li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/resource-loader.ts:260:1"><code>loadProjectContextFiles</code></a>按来源收集项目上下文；与本课只接收显式文本的 <code>composeInstructions</code>不同。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/resource-loader.ts:541:1"><code>reload</code></a>处理项目信任、路径与资源；<a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/resource-loader.ts:791:1"><code>loadFinalExtensionSet</code></a>装配顺序并记录冲突。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/extensions/runner.ts:637:1"><code>getAllRegisteredTools</code></a>对同名工具采用先注册者优先；本课直接拒绝重名，这是教学选择，不能说成 pi 的规则。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/extensions/runner.ts:1305:1"><code>emitContext</code></a>先处理 conversation-only 的 context hook，再处理能看见完整上下文的 context_with_system hook。异常会报告到扩展错误监听器；并非一律抛给上层。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi/packages/coding-agent/src/core/extensions/runner.ts:1249:1"><code>emitToolCall</code></a>又采用不同控制规则：等待处理器，block 时提前返回。带着“事件是否参与执行决定”的问题比较它们。</li>
+</ol>
+<h3>DeepSeek 把默认循环本身也作为插件服务</h3>
+<p>固定 commit 为 <code>f3803c96974ad4a94195fb97e5c637e9c2a3afe3</code>。本仓库保留了一份 MIT 许可的只读源码快照，让下面的代码链接也能直接在 Zed 中打开。这不是新建的 Git 仓库，也没有参与课程编译。</p>
+<ol><li><a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/10-extensions/references/deepseek/agent-loop-index.ts.txt:292:1"><code>AgentLoop.static inject</code></a>声明依赖 agents、sessions、llm、tools、systemPrompt 和 sessionProjections，说明默认驱动通过服务依赖装配。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/10-extensions/references/deepseek/agent-loop-index.ts.txt:329:1"><code>Service.init</code></a>注册投影，再通过 <code>ctx.effect</code>把自己设为 agent factory；注册效果与所属生命周期关联。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/10-extensions/references/deepseek/agent-loop-index.ts.txt:498:1"><code>teardown</code></a>等待运行停止、清理 scope、关闭持久化句柄、退出注册表，收集失败后再报告。可替换的服务不意味着退出可以只删除一个数组元素。</li>
+<li><a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/10-extensions/references/deepseek/agent-loop-index.ts.txt:802:1">恢复时补齐中断边界</a>：加载持久日志后调用 <code>interruptedTurnClosers</code>再追加结束记录。这与第 08 课停下等待人工核对的教学选择不同；补错误结果也不表示外部副作用已撤销。</li>
+</ol>
+<div class="table-scroll"><table><thead><tr><th>比较问题</th><th>pi 的本课观察范围</th><th>DeepSeek 的本课观察范围</th></tr>
+</thead><tbody><tr><td>新能力怎样接入</td><td>资源装配后由 ExtensionRunner 调用具体事件处理器，工具接回 Agent 工具链。</td><td>Cordis 服务与事件组合；默认 AgentLoop 自己也是可装配服务。</td></tr>
+<tr><td>替换范围</td><td>从已有 Agent 与 coding-agent 入口观察工具、上下文和事件扩展。</td><td>默认驱动注册为 factory，依赖通过服务声明提供。</td></tr>
+<tr><td>代价在哪里</td><td>需要理解每种事件的错误与覆盖规则，不能用一个规则推断全部。</td><td>需要理解服务依赖、作用域与销毁次序；装配和生命周期成为必读部分。</td></tr>
+</tbody></table></div>
+<p>前两行是这里核对到的代码事实；最后一行是由这些机制推导的工程分析，不冒充作者对所有用户的动机。DeepSeek 的更广泛插件原则见<a href="https://github.com/deepseek-ai/deepseek-harness/blob/f3803c96974ad4a94195fb97e5c637e9c2a3afe3/docs/architecture.md">固定版本架构文档</a>。我们没有安装运行 DeepSeek，也没有由这个单文件判断其全部性能或可靠性。</p>
+</section>
+<section id="lab">
+<h2>保持循环不变，接入一个项目扩展</h2>
+<p>打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/10-extensions/exercise.ts:1:1">学生入口</a>实现装配函数，使用 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/10-extensions/example.ts:1:1">已提供的 project-notes 扩展</a>验证：启用后有 project_info 和请求前提醒，禁用后回到基础行为。</p>
+<pre><code>npm run lab -- 10 test
+npm run lab -- 10 verify
+npm run lab -- 10 demo</code></pre><p>初始前七项学生检查失败，最后一项只检查已提供的指令文本拼装。参考 demo 实际执行 hook 与工具，没有调用模型。先不要打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/solutions/10-extensions.ts:1:1">独立参考实现</a>，先明确以下契约。</p>
+<ul><li>禁用扩展不贡献工具、hook 或清理任务；启用项的名字与工具名冲突时启动失败。</li>
+<li>每个 hook 等上一个结束，失败时不再调用后续 hook；传递同一取消信号。</li>
+<li>清理按反向顺序运行，遇到一个错误也继续清理其他扩展，最后汇总。</li>
+<li>重复 dispose 返回同一个完成承诺；清理开始后不能再发起扩展工具或上下文处理。</li>
+</ul><details><summary>提示 1 · 先列出启动时就能确定的事</summary><p>启用列表、扩展名和工具冲突都能在模型请求之前决定。不要等模型恰好调用重名工具才报错。</p>
+</details>
+<details><summary>提示 2 · Promise.all 会改变 hook 含义</summary><p>如果 B 必须看到 A 的输出，并行调用会让两者都拿到同一个旧输入。这里要顺序 await；第 07 课的并行工具规则不能直接搬过来。</p>
+</details>
+<details><summary>提示 3 · 一次清理失败以后还有什么要做</summary><p>继续清理较早注册的扩展，保留所有错误。用一个记住的 Promise 让多个退出触发者等待同一次清理，避免资源被重复释放。</p>
+</details>
+</section>
+<section id="tradeoffs">
+<h2>扩展不是隔离机制</h2>
+<p>本课加载的扩展和 CLI 在同一个 Node 进程，拥有宿主代码的能力。工具校验限制的是模型通过工具接口请求的操作；它不能阻止一个恶意扩展直接调用文件 API。只有信任并审查后才加载代码，或者另设进程与操作系统隔离，这是不同层次的选择。</p>
+<p>我们没有加入插件市场、依赖下载和热重载。对这个个人学习 Agent，显式导入更容易追踪。若需求变成用户动态安装插件，就要增加版本约束、加载信任、资源归属、重载竞态和可诊断的冲突策略；“支持插件”四个字不能替代这些设计。</p>
+<p>dispose 使将来的入口失效，不撤销过去产生的文件修改。调用者必须先停止 Agent 并等待在途工具结束，再释放扩展；否则正在运行的工具可能在清理后继续访问已关闭资源。本课把这个顺序放在主程序的 finally 中，毕业项目会核对实际接法。</p>
+</section>
+<section id="review">
+<h2>自测与评阅</h2>
+<details><summary>项目指令写了“不要访问父目录”，能替代工具路径检查吗？</summary><p>不能。指令影响模型生成；路径检查由执行器决定实际操作能否发生。模型误解或外部内容诱导时，执行侧边界仍须成立。</p>
+</details>
+<details><summary>两个 hook 都返回新消息数组，交换顺序会怎样？</summary><p>后一个处理的是前一个的结果。例如先裁剪后加提醒，与先加提醒后裁剪可能得到不同请求。顺序应在文档与测试中固定。</p>
+</details>
+<details><summary>为什么不把本课异常策略直接说成 pi 的策略？</summary><p>pi 的不同事件有不同控制语义。context hook 的异常会报告，tool_call 的 block 又影响执行决定；必须查看具体分发函数。</p>
+</details>
+<p>提交代码、启用/禁用两种 demo 结果、冲突与清理失败测试。再回答一个反事实：若将主循环也做成可替换插件，你当前要增加哪些装配和生命周期约定？给出需要它的实际需求，或说明为何暂不采用。</p>
+<a href="../index.html#map">返回课程地图 →</a></section>
+<footer>pi 1be312b46；DeepSeek Harness f3803c9。比较基于明确文件的静态阅读，课程实验只执行本地参考扩展。</footer>
+</main></div></body></html>

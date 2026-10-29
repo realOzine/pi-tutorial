@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>00 · 必要的 TypeScript · Pi 学习手册</title><link rel="stylesheet" href="../assets/course.css"><script type="module" src="../assets/lesson-tools.mjs"></script></head>
+<body><a class="skip-link" href="#main">跳到正文</a><div class="layout">
+<aside class="sidebar"><a class="brand" href="../index.html">Pi 学习手册</a><p class="brand-note">00 · 读懂类型与异步</p><nav aria-label="本课目录"><a href="#problem">为什么先学这些语法</a><a href="#types">消息与类型收窄</a><a href="#async">等待、异常与取消</a><a href="#trace">单步观察</a><a href="#source">对应 pi 源码</a><a href="#lab">动手练习</a><a href="#tradeoffs">取舍与自测</a></nav></aside>
+<main id="main"><header><p class="eyebrow">准备课 / 00</p><h1>先分清消息，再等待结果</h1><p class="lead">一个 Agent 会处理用户问题、模型的工具请求和工具结果。这些数据长得相似，允许做的事却不同。本课只补齐后面读源码和写实验必需的 TypeScript。</p><div class="meta"><span>前提：函数、数组、基本控制流</span><span>产物：消息分支与异步操作包装</span><span>无需模型账号</span></div></header>
+<section id="problem"><h2>同样是消息，为什么不能随便取字段</h2><p>假设页面收到一个对象，代码直接读取 <code>message.callId</code>。工具结果确实有调用 ID；用户消息只有提问。程序如果把后者当作工具结果，会拿到 <code>undefined</code>，错误却可能到下一次 HTTP 请求才暴露。</p><p>我们先把“是哪一种消息”存成明确的标签，再规定每一种允许哪些字段。编译器便能在你写错分支时提醒。运行时从 JSON 收到的数据仍可能不符合声明；第 2 课会在那个边界校验。</p><pre><code>type Message =
+  | { role: "user"; content: string }
+  | { role: "tool"; callId: string; content: string; isError: boolean };
+
+function label(message: Message): string {
+  if (message.role === "tool") {
+    return message.callId; // 这里已确定是工具结果
+  }
+  return message.content;
+}</code></pre><p>这叫可区分的联合类型：<code>|</code> 表示几种可能，<code>role</code> 是共同的区分字段。不是把所有字段都设成可选；后一种写法会允许“既没有用户内容，也没有工具 ID”的含糊状态。</p></section>
+<section id="types"><h2>只掌握当前会用到的六种写法</h2><div class="table-scroll"><table><thead><tr><th>写法</th><th>在课程里的用途</th><th>容易误解的地方</th></tr></thead><tbody>
+<tr><td><code>type X = ...</code></td><td>描述值的结构</td><td>类型擦除后不会替网络输入做校验</td></tr>
+<tr><td><code>role: "tool"</code></td><td>把标签限制为一个字面值</td><td><code>role: string</code> 无法提供同样的分支约束</td></tr>
+<tr><td><code>readonly Message[]</code></td><td>表达当前函数不应修改传入数组</td><td>不会递归冻结对象，也不等于复制了数据</td></tr>
+<tr><td><code>(signal) =&gt; Promise&lt;string&gt;</code></td><td>把操作作为函数传入，便于换成假工具</td><td>函数值可以晚些调用；调用后才开始操作</td></tr>
+<tr><td><code>import type</code></td><td>只导入类型，不加载运行时值</td><td>本课用 Node 直接运行 .ts，类型导入应明确标记</td></tr>
+<tr><td><code>unknown</code></td><td>表示尚未检查的外部值或异常</td><td>需要先判断类型；用断言强行改类型不会改变真实值</td></tr>
+</tbody></table></div><p>已有 Go 经验时，可以把带标签的对象理解为“用字段明确记录当前变体”。但 TypeScript 不要求值先声明实现某个接口：结构匹配就能赋值。也不要把 <code>Promise</code> 类比成 goroutine；它代表未来结果，不代表一个新线程。</p><p>本仓库用 <code>tsc --noEmit</code> 做类型检查，用 Node 运行可擦除类型的 TypeScript。Node 能执行文件不表示类型正确。我们不用需要生成额外 JavaScript 的 <code>enum</code> 或构造器参数属性，让运行方式保持直观。依据见 <a href="https://nodejs.org/api/typescript.html">Node TypeScript 文档</a>；类型收窄见 <a href="https://www.typescriptlang.org/docs/handbook/2/narrowing.html">TypeScript 手册</a>。</p></section>
+<section id="async"><h2>await 暂停这一段逻辑，不是把工作自动并行化</h2><p>下面两次调用是顺序发生的：先调用 <code>readA</code>，等结果返回，再调用 <code>readB</code>。等待期间，JavaScript 可以处理其他事件，但不会替你提前调用第二个函数。</p><pre><code>const a = await readA();
+const b = await readB();
+
+// 两个操作互不依赖时，才考虑同时开始：
+const [x, y] = await Promise.all([readA(), readB()]);</code></pre><p>如果 B 要读 A 刚写出的文件，第二种写法会引入竞争。<code>Promise.all</code> 中有一项失败，也不会自动取消另一项。第 7 课再处理并发；现在先保持执行顺序可解释。</p><h3>异常不保证是 Error</h3><p>JavaScript 允许 <code>throw "missing"</code>，也允许抛对象。捕获后先判断 <code>error instanceof Error</code>，再取 <code>message</code>；否则用 <code>String(error)</code>。这不是隐藏失败，而是把失败转成协议约定的结果。将来应避免把凭据和敏感内部信息放进错误反馈。</p><h3>取消是一条需要合作的通知</h3><p><code>AbortController.abort()</code> 会把信号标成已取消。操作必须检查它，或把它交给支持信号的 API。一个完全忽略信号的函数仍会跑完；本课等待它结束后返回 <code>cancelled</code>，但已经写入的文件不会因此恢复。</p><p>所以要区分三件事：不启动已取消的操作、把信号传给正在执行的操作、如实报告最终状态。立即返回一个取消结果却放任后台工作继续，会让后续代码误以为已经可以安全清理资源。</p></section>
+<section id="trace"><h2>预测取消会发生在哪里</h2><p>先选“开始前取消”：工具是否会运行？再选“运行中取消”：为什么最终状态是取消，副作用却仍存在？这些步骤是教学模拟；本地测试会另外验证相同边界。</p>
+<div class="simulator" data-walkthrough><script type="application/json" class="walkthrough-data">{"scenarios":[{"id":"before","label":"开始前取消","steps":[{"title":"用户先点停止","detail":"信号已取消，尚未调用工具。","state":{"aborted":true,"calls":0}},{"title":"检查信号后返回","detail":"没有启动任何工作，返回取消状态。","state":{"status":"cancelled","calls":0}}]},{"id":"during","label":"不合作的操作收到取消","steps":[{"title":"工具开始","detail":"传入同一个信号，但操作没有监听或检查它。","state":{"aborted":false,"sideEffect":false}},{"title":"用户取消后仍发生写入","detail":"通知不等于强制抢占，操作继续执行。","state":{"aborted":true,"sideEffect":true}},{"title":"await 结束再判定","detail":"包装函数返回取消；副作用仍然存在，需要上层另行处理。","state":{"status":"cancelled","sideEffect":true}}]},{"id":"error","label":"普通失败","steps":[{"title":"等待读取","detail":"操作返回 Promise，包装函数等待其结果。","state":{"status":"pending"}},{"title":"操作抛出字符串","detail":"unknown 先收窄，非 Error 值转换为字符串。没有取消信号，就属于普通失败。","state":{"status":"failed","error":"文件不存在"}}]}]}</script></div></section>
+<section id="source"><h2>带着三个问题看 pi 的类型</h2><p>打开 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/types.ts:374:1"><code>AgentMessage</code> 类型声明</a>，找到标准消息与自定义消息如何组成联合。再看 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/types.ts:466:1"><code>AgentTool</code></a>：执行函数接收取消信号，并返回 Promise。最后看 <a href="zed://file/Users/ozine/Project/learn/pi/packages/agent/src/types.ts:516:1"><code>AgentEvent</code></a>：不同事件通过 <code>type</code> 区分。</p><p>源码事实：pi 的消息和事件类型比本课丰富，工具也携带 schema、结构化结果和执行策略。本课只借用“标签约束字段、异步函数返回结果、信号明确传递”三种方式。无需现在展开所有泛型，也不能由类型签名推断底层操作一定响应取消；那需要继续看实现与测试。</p></section>
+<section id="lab"><h2>补齐两个函数</h2><p>打开 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/00-typescript/exercise.ts:1:1">学生文件</a> 和 <a href="zed://file/Users/ozine/Project/learn/pi-tutorial/labs/00-typescript/exercise.test.ts:1:1">实验检查</a>。先运行学生检查，确认失败指向 TODO，再实现 <code>describeMessage</code> 和 <code>runOperation</code>。</p><pre><code>npm run lab -- 00 test
+npm run lab -- 00 demo
+npm run lab -- 00 verify</code></pre><p><code>test</code> 检查你的代码；<code>demo</code> 和 <code>verify</code> 使用独立参考实现。后两条通过不代表你已经完成练习。</p><ol><li>按 <code>role</code> 生成说明，格式以测试为准。不要把缺失字段补成空值绕开分支。</li><li>操作开始前已取消，就直接返回取消结果，调用次数必须为零。</li><li>把原信号传入操作并等待。结束后先检查取消，再判定成功或普通错误。</li><li>错误分支处理 Error 与字符串两种输入。不要用 <code>any</code> 关闭类型检查。</li></ol>
+<details><summary>提示 1：类型分支和结果分支分别在哪里</summary><p><code>describeMessage</code> 的条件来自 <code>role</code>；<code>runOperation</code> 的结果来自“是否取消”和“等待成功或失败”。后者可以用 try/catch 表达，不需要设计状态机类。</p></details><details><summary>提示 2：为何 try 和 catch 都要考虑取消</summary><p>合作的操作可能在取消时抛异常；不合作的操作可能在取消后仍正常返回。只在一个分支检查会把另一种情况误报成成功或普通失败。</p></details><details><summary>提示 3：新增一种消息会怎样</summary><p>把联合类型临时增加一种 role，运行类型检查。完整覆盖的 switch 在声明返回 string 的函数里需要处理新分支；一个兜底 return 可能掩盖遗漏。完成观察后恢复类型，再进入下一课。</p></details></section>
+<section id="tradeoffs"><h2>把取舍说清楚</h2><p>显式联合类型让非法组合更难写出，但它依赖代码经过类型检查。网络 JSON、磁盘日志和模型参数没有这种保证。相反，把每个内部对象都重复校验也会让简单代码难读；后续课将把校验放在数据进入系统的边界。</p><p>把错误转成结果便于调用方统一处理，但必须保留失败与取消的区别。若工具失败就被当成普通文本，模型会误以为执行成功；若取消被当成可重试错误，停止按钮反而可能触发新工作。</p><details><summary>自测：async 函数里两行 await 会启动两个线程吗</summary><p>不会。第二个调用在第一个等待完成后才开始；Promise 表示未来结果，底层是否使用线程由具体 API 决定。</p></details><details><summary>自测：把 JSON 断言成 Message，能保证 callId 存在吗</summary><p>不能。断言只影响编译器理解；运行时数据需要实际检查。第 2 课实现这个边界。</p></details><details><summary>自测：返回 cancelled 能证明文件没有被改过吗</summary><p>不能。取消发生的时间和操作是否合作都重要。应检查实际副作用，并由上层确定恢复策略。</p></details><p>提交你的两个函数、测试结果，以及这三个问题的解释。评阅先看行为，再看错误边界，最后看代码能否顺着执行过程读懂。下一课会把一次异步操作放进循环，让工具结果成为下一次模型输入。</p><a class="next-link" href="01-agent-loop.html">进入第 1 课：最小 Agent 循环 →</a></section>
+<footer>pi 源码基线 1be312b46 · 本课不调用模型。教材、模拟、参考检查与学生作业是不同证据。</footer></main></div></body></html>
