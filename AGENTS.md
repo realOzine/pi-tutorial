@@ -23,7 +23,7 @@ This repository holds the course, its local HTML pages, and TypeScript labs. The
 ## Git workflow
 
 - The user authorizes small commits and merges for this course. Use `docs:`, `feat:`, or `fix:` messages.
-- Parallel work uses separate worktrees and disjoint file ownership. Stage explicit paths only.
+- Keep everything under this repository directory. Parallel work uses temporary worktrees inside ignored `.worktrees/` and disjoint file ownership. Stage explicit paths only.
 - Review and validate before merging. Do not modify the sibling pi repository.
 - Remove only this task's clean, merged worktrees and branches after verifying their commits are reachable from `main`.
 - Never use force cleanup, hard reset, broad staging, or discard another session's changes.
